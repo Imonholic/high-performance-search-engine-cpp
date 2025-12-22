@@ -261,6 +261,329 @@ Important Notes:
     • Always use strcmp() for C-style string comparisons
 
 ================================================================================
+3. CONVERTING STRINGS TO INTEGERS: std::stoi() vs atoi()
+================================================================================
+
+3.1 Introduction
+----------------
+In many applications, including our search engine, we need to convert string
+representations of numbers into actual integer values. For example, converting
+a string "123" into the integer 123 for numerical operations or comparisons.
+
+C++ provides two main functions for this purpose:
+    • std::stoi() - Modern C++ function (C++11 and later)
+    • atoi()      - Legacy C function
+
+Understanding the differences between these functions is crucial for writing
+safe and robust code.
+
+3.2 What is std::stoi()?
+------------------------
+Definition:
+    std::stoi() (string to integer) is a C++11 standard library function that
+    safely converts a string to an integer with robust error handling.
+
+Function Signature:
+    #include <string>
+    
+    int std::stoi(const std::string& str, size_t* pos = 0, int base = 10);
+
+Parameters:
+    • str  - The string to convert
+    • pos  - (Optional) Pointer to store position of first unconverted character
+    • base - (Optional) Numerical base (2-36), default is 10 (decimal)
+
+Requirements:
+    • Requires #include <string> header
+    • Compiler must support C++11 or later standard
+    • Part of modern C++ standard library
+
+3.3 What is atoi()?
+-------------------
+Definition:
+    atoi() (ASCII to integer) is a legacy C function that converts a C-style
+    string to an integer.
+
+Function Signature:
+    #include <cstdlib>
+    
+    int atoi(const char* str);
+
+Characteristics:
+    • Legacy function from C standard library
+    • Simple but lacks error handling
+    • Returns 0 on error (ambiguous!)
+    • Cannot distinguish between valid "0" and conversion failure
+
+3.4 Key Differences: std::stoi() vs atoi()
+-------------------------------------------
+
+Feature              | std::stoi()                  | atoi()
+---------------------|------------------------------|------------------------
+Error Handling       | Throws exceptions            | Returns 0 (ambiguous)
+Invalid Input        | std::invalid_argument        | Returns 0
+Out of Range         | std::out_of_range            | Undefined behavior
+Input Type           | std::string                  | const char*
+Standard             | C++11 and later              | C89/C++98
+Safety               | ✅ Safe with exceptions      | ❌ Unsafe, no error info
+Base Conversion      | Supports multiple bases      | Only base-10
+Debugging            | ✅ Clear error messages      | ❌ Silent failures
+
+3.5 Why Use std::stoi() Instead of atoi()?
+-------------------------------------------
+Problem 1: atoi() Cannot Detect Errors
+
+    #include <cstdlib>
+    #include <iostream>
+    
+    int main() {
+        int result1 = atoi("0");      // Valid input: "0"
+        int result2 = atoi("abc");    // Invalid input!
+        int result3 = atoi("");       // Empty string!
+        
+        std::cout << result1 << "\n";  // Prints: 0 ✓ Correct
+        std::cout << result2 << "\n";  // Prints: 0 ❌ Wrong! Should be error
+        std::cout << result3 << "\n";  // Prints: 0 ❌ Wrong! Should be error
+        
+        // How do you know if 0 is valid or an error? YOU CAN'T!
+        return 0;
+    }
+
+The Problem:
+    atoi() returns 0 for:
+    • Valid input: "0"
+    • Invalid input: "abc"
+    • Empty input: ""
+    • Null pointer: nullptr
+    
+    You CANNOT DISTINGUISH between a legitimate zero and an error!
+
+Solution: std::stoi() Throws Exceptions
+
+    #include <string>
+    #include <iostream>
+    #include <stdexcept>
+    
+    int main() {
+        try {
+            int result1 = std::stoi("0");       // ✓ Valid: returns 0
+            std::cout << "Result: " << result1 << "\n";
+            
+            int result2 = std::stoi("abc");     // ✗ Invalid!
+            // This line never executes
+        }
+        catch (const std::invalid_argument& e) {
+            std::cout << "Error: Invalid input!\n";  // ✓ Caught the error!
+        }
+        catch (const std::out_of_range& e) {
+            std::cout << "Error: Number too large!\n";
+        }
+        
+        return 0;
+    }
+
+3.6 Exception Types in std::stoi()
+-----------------------------------
+1. std::invalid_argument
+   Thrown when: The string is not a valid integer representation.
+   
+   Example:
+       try {
+           int num = std::stoi("hello");   // Not a number!
+       } catch (const std::invalid_argument& e) {
+           std::cout << "Invalid argument: " << e.what() << "\n";
+       }
+   
+   Common Cases:
+       • Non-numeric characters: "abc", "hello"
+       • Empty strings: ""
+       • Special characters only: "@#$"
+
+2. std::out_of_range
+   Thrown when: The converted value exceeds the range of int type.
+   
+   Example:
+       try {
+           // Integer range: -2,147,483,648 to 2,147,483,647 (32-bit)
+           int num = std::stoi("9999999999999999");  // Too large!
+       } catch (const std::out_of_range& e) {
+           std::cout << "Out of range: " << e.what() << "\n";
+       }
+   
+   Common Cases:
+       • Numbers larger than INT_MAX (2,147,483,647)
+       • Numbers smaller than INT_MIN (-2,147,483,648)
+
+3.7 Practical Examples
+----------------------
+Example 1: Safe Conversion with Error Handling
+
+    #include <string>
+    #include <iostream>
+    #include <stdexcept>
+    
+    int safeStringToInt(const std::string& input) {
+        try {
+            int result = std::stoi(input);
+            return result;
+        }
+        catch (const std::invalid_argument& e) {
+            std::cerr << "Error: '" << input << "' is not valid\n";
+            return -1;
+        }
+        catch (const std::out_of_range& e) {
+            std::cerr << "Error: '" << input << "' is out of range\n";
+            return -1;
+        }
+    }
+    
+    int main() {
+        std::string input1 = "42";
+        std::string input2 = "abc";
+        std::string input3 = "9999999999";
+        
+        std::cout << "Result 1: " << safeStringToInt(input1) << "\n";  // 42
+        std::cout << "Result 2: " << safeStringToInt(input2) << "\n";  // Error
+        std::cout << "Result 3: " << safeStringToInt(input3) << "\n";  // Error
+        
+        return 0;
+    }
+
+Example 2: Converting with Different Bases
+
+    #include <string>
+    #include <iostream>
+    
+    int main() {
+        // Binary (base 2)
+        int binary = std::stoi("1010", nullptr, 2);
+        std::cout << "Binary 1010: " << binary << "\n";  // Prints: 10
+        
+        // Hexadecimal (base 16)
+        int hex = std::stoi("FF", nullptr, 16);
+        std::cout << "Hex FF: " << hex << "\n";          // Prints: 255
+        
+        // Octal (base 8)
+        int octal = std::stoi("17", nullptr, 8);
+        std::cout << "Octal 17: " << octal << "\n";      // Prints: 15
+        
+        return 0;
+    }
+
+3.8 How This Applies to Our Search Engine
+------------------------------------------
+Our search engine might use std::stoi() for:
+
+1. Processing Numerical Search Parameters:
+    // Convert command-line argument to integer
+    try {
+        int max_results = std::stoi(argv[2]);  // "./searchengine query 10"
+        std::cout << "Showing top " << max_results << " results\n";
+    }
+    catch (const std::invalid_argument& e) {
+        std::cerr << "Error: Max results must be a number!\n";
+        return 1;
+    }
+
+2. Reading Configuration Values:
+    // Parse configuration from file
+    std::string config_value = "100";  // Read from config file
+    try {
+        int buffer_size = std::stoi(config_value);
+        // Use buffer_size...
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Invalid configuration value\n";
+    }
+
+3. Validating User Input:
+    // Ensure user provides valid numerical input
+    std::string user_choice;
+    std::cout << "Select document (1-10): ";
+    std::getline(std::cin, user_choice);
+    
+    try {
+        int choice = std::stoi(user_choice);
+        if (choice < 1 || choice > 10) {
+            std::cout << "Choice out of range!\n";
+        } else {
+            // Process valid choice
+        }
+    }
+    catch (const std::invalid_argument& e) {
+        std::cout << "Please enter a valid number!\n";
+    }
+
+3.9 Common Pitfalls to Avoid
+-----------------------------
+❌ Wrong: Using atoi() without validation
+    int value = atoi(user_input.c_str());
+    if (value == 0) {
+        // Is this an error or did user enter "0"? AMBIGUOUS!
+    }
+
+✓ Correct: Using std::stoi() with exception handling
+    try {
+        int value = std::stoi(user_input);
+        // Use value safely
+    }
+    catch (const std::invalid_argument& e) {
+        // Handle invalid input
+    }
+    catch (const std::out_of_range& e) {
+        // Handle overflow
+    }
+
+Important Notes:
+    1. Always Use Try-Catch: Never use std::stoi() without exception handling
+       Bad:  int num = std::stoi(input);  // Can crash!
+       Good: try { int num = std::stoi(input); } catch (...) { /* handle */ }
+    
+    2. Partial Conversions: std::stoi() converts until it hits a non-digit
+       int num = std::stoi("123abc");  // Returns 123 (stops at 'a')
+    
+    3. Leading Whitespace: Both functions skip leading whitespace
+       int num = std::stoi("  42");    // Returns 42 ✓
+
+3.10 Related Functions
+----------------------
+The C++ standard library provides similar conversion functions:
+
+Function      | Converts To    | Example
+--------------|----------------|---------------------------
+std::stoi()   | int            | std::stoi("42")
+std::stol()   | long           | std::stol("1000000")
+std::stoll()  | long long      | std::stoll("999999999999")
+std::stoul()  | unsigned long  | std::stoul("4294967295")
+std::stof()   | float          | std::stof("3.14")
+std::stod()   | double         | std::stod("3.14159265")
+
+All follow the same exception-based error handling pattern.
+
+3.11 Quick Comparison Table
+---------------------------
+Scenario                | atoi()          | std::stoi()
+------------------------|-----------------|------------------------
+Input: "42"             | Returns 42      | Returns 42
+Input: "abc"            | Returns 0 ❌    | Throws exception ✓
+Input: "0"              | Returns 0       | Returns 0
+Input: "999999999999"   | Undefined ❌    | Throws exception ✓
+Error detection         | ❌ Impossible   | ✓ Via exceptions
+Safety                  | ❌ Unsafe       | ✓ Safe
+Modern C++              | ❌ Legacy       | ✓ Recommended
+
+3.12 Summary
+------------
+    • std::stoi() is the MODERN, SAFE way to convert strings to integers
+    • atoi() is LEGACY and UNSAFE - avoid in new code
+    • std::stoi() throws std::invalid_argument for invalid input
+    • std::stoi() throws std::out_of_range for values outside int range
+    • atoi() returns 0 on error, impossible to distinguish from valid zero
+    • ALWAYS use exception handling with std::stoi()
+    • Requires C++11 or later and #include <string>
+    • Essential for robust input validation in our search engine
+
+================================================================================
 REFERENCES
 ================================================================================
 For more information, visit:
