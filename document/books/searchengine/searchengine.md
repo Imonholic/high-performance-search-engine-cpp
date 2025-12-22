@@ -64,7 +64,7 @@ int main(int argc, char **argv);   // Pointer notation
 
 #### Visual Diagram
 
-![argc and argv memory structure](../pic/argv+argc.png)
+![argc and argv memory structure](../../pic/argv+argc.png)
 
 *Figure 1: Memory layout of argc and argv showing how command-line arguments are stored*
 
