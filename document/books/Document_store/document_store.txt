@@ -1,0 +1,1291 @@
+===============================================================================
+           DOCUMENT STORE - C FILE I/O FUNCTIONS DOCUMENTATION
+===============================================================================
+
+This document provides comprehensive explanations of all C file I/O functions 
+and concepts used in the document_store.cpp implementation of our 
+high-performance search engine.
+
+===============================================================================
+TABLE OF CONTENTS
+===============================================================================
+1. fopen() - Opening Files
+2. fclose() - Closing Files
+3. fgetc() - Reading Characters
+4. eof() - End-of-File Detection
+5. ungetc() - Pushing Characters Back
+6. size_t - Unsigned Integer Type
+7. getline() - Reading Lines (POSIX)
+8. getline() Windows Problem & Solutions
+9. free() - Deallocating Memory
+
+===============================================================================
+TOPIC 1: fopen() - Opening Files
+===============================================================================
+
+WHAT IS fopen()?
+fopen() is a C standard library function used to OPEN A FILE and establish 
+a connection between the program and the file. It returns a pointer to a 
+FILE object that controls the file stream.
+
+SYNTAX:
+    FILE* fopen(const char* filename, const char* mode);
+
+PARAMETERS:
+    - filename: Path to the file (relative or absolute)
+    - mode: String specifying the file access mode
+
+COMMON FILE MODES:
+    Mode    Description                File Must Exist?    Overwrites?
+    ----    -----------                ----------------    -----------
+    "r"     Read only                  Yes                 No
+    "w"     Write only                 No                  Yes
+    "a"     Append                     No                  No
+    "r+"    Read and write             Yes                 No
+    "w+"    Read and write             No                  Yes
+    "a+"    Read and append            No                  No
+    "rb"    Read binary                Yes                 No
+    "wb"    Write binary               No                  Yes
+
+RETURN VALUE:
+    - Success: Returns a pointer to FILE object
+    - Failure: Returns NULL (file doesn't exist, permission denied, etc.)
+
+PRACTICAL EXAMPLE from document_store.cpp:
+    FILE *file = fopen(file_name, "r");
+    if (file == NULL) {
+        cout << "Error: Cannot open file " << file_name << endl;
+        return -1;
+    }
+
+VISUAL REPRESENTATION:
+    Program Memory                    Disk Storage
+    +-----------+                    +-------------+
+    |  FILE*    |  fopen("r")       |   doc1.txt  |
+    |   file    | ----------------> |   Content   |
+    | (pointer) | <---------------- |   Lines...  |
+    +-----------+   Read Access     +-------------+
+
+KEY POINTS:
+    - Always check if fopen() returns NULL before using the file pointer
+    - Use "r" mode when you only need to read the file
+    - Use "b" suffix for binary files on Windows to prevent newline translation
+    - File pointer must be closed with fclose() after use
+
+===============================================================================
+TOPIC 2: fclose() - Closing Files
+===============================================================================
+
+WHAT IS fclose()?
+fclose() is a C standard library function used to CLOSE AN OPEN FILE STREAM 
+and release all resources associated with it. It also flushes any buffered 
+data to the file.
+
+SYNTAX:
+    int fclose(FILE* stream);
+
+PARAMETERS:
+    - stream: Pointer to the FILE object to be closed
+
+RETURN VALUE:
+    - Success: Returns 0
+    - Failure: Returns EOF (typically -1) if an error occurs
+
+WHAT HAPPENS WHEN YOU CALL fclose()?
+    1. Flushes Buffers: Writes any unwritten data from buffer to file
+    2. Releases Resources: Frees memory allocated for the file stream
+    3. Disassociates Stream: Breaks the connection between program and file
+    4. Makes Pointer Invalid: Using pointer after fclose() causes undefined behavior
+
+PRACTICAL EXAMPLE from document_store.cpp:
+    FILE *file = fopen(file_name, "r");
+    // ... read from file ...
+    fclose(file);
+
+WHY fclose() IS CRITICAL?
+
+    Problem Without fclose():
+        FILE *file = fopen("data.txt", "w");
+        fprintf(file, "Important data");
+        // Program crashes or exits without fclose()
+        // Data might be lost! (still in buffer)
+
+    Solution With fclose():
+        FILE *file = fopen("data.txt", "w");
+        fprintf(file, "Important data");
+        fclose(file);  // Data safely written to disk
+
+MEMORY LEAK EXAMPLE:
+    BAD (Memory leak):
+        for(int i = 0; i < 1000; i++) {
+            FILE *f = fopen("temp.txt", "r");
+            // ... use file ...
+            // Missing fclose(f) - leaks resources!
+        }
+
+    GOOD (Properly closes files):
+        for(int i = 0; i < 1000; i++) {
+            FILE *f = fopen("temp.txt", "r");
+            // ... use file ...
+            fclose(f);  // Releases resources
+        }
+
+VISUAL REPRESENTATION:
+    Before fclose():              After fclose():
+    +-------------+              +-------------+
+    |   Program   |              |   Program   |
+    |             |              |             |
+    |   FILE*  ---|---> [Buffer] |   FILE* = ? |
+    |             |       |      |             |
+    +-------------+   [Disk File]+-------------+
+                                  [File Closed]
+
+KEY POINTS:
+    - ALWAYS call fclose() for every successful fopen()
+    - Check the return value to detect write errors
+    - Using a closed file pointer results in undefined behavior
+    - OS limits the number of open files - closing prevents resource exhaustion
+
+===============================================================================
+TOPIC 3: fgetc() - Reading Characters
+===============================================================================
+
+WHAT IS fgetc()?
+fgetc() is a C standard library function that READS THE NEXT CHARACTER from 
+an input stream and returns it as an integer. It's commonly used for 
+character-by-character file reading.
+
+SYNTAX:
+    int fgetc(FILE* stream);
+
+PARAMETERS:
+    - stream: Pointer to the FILE object from which to read
+
+RETURN VALUE:
+    - Success: Returns the character as an unsigned char cast to int
+    - End of File or Error: Returns EOF (typically -1)
+
+WHY RETURN TYPE IS int (NOT char)?
+    // EOF is typically -1 (negative value)
+    // char range: -128 to 127 (signed) or 0 to 255 (unsigned)
+    // int range: -2,147,483,648 to 2,147,483,647
+
+    int c = fgetc(file);
+    if (c == EOF) {  // Can distinguish EOF from valid character 255
+        // End of file or error
+    }
+
+    Problem with char return type:
+    - Character with value 255 might be confused with EOF (-1)
+    - int safely holds all possible char values PLUS special EOF value
+
+PRACTICAL EXAMPLE from document_store.cpp:
+    // Check if file is empty
+    int c = fgetc(file);
+    if(c == EOF){
+        cout << "File is empty: " << file_name << endl;
+        fclose(file);
+        return -1;
+    }
+    ungetc(c, file);  // Put character back
+
+READING FILE CHARACTER BY CHARACTER:
+    FILE *file = fopen("document.txt", "r");
+    int c;
+
+    while((c = fgetc(file)) != EOF) {
+        printf("%c", c);  // Print each character
+    }
+
+    fclose(file);
+
+DETECTING ERRORS VS EOF:
+    int c = fgetc(file);
+    if (c == EOF) {
+        if (feof(file)) {
+            printf("End of file reached\n");
+        } else if (ferror(file)) {
+            printf("Read error occurred\n");
+        }
+    }
+
+VISUAL REPRESENTATION:
+    File: "Hello"           Memory
+    +---+---+---+---+---+
+    | H | e | l | l | o |
+    +---+---+---+---+---+
+      ^
+      File Position Indicator
+
+    1st fgetc() -> Returns 'H' (72)
+    2nd fgetc() -> Returns 'e' (101)
+    3rd fgetc() -> Returns 'l' (108)
+    4th fgetc() -> Returns 'l' (108)
+    5th fgetc() -> Returns 'o' (111)
+    6th fgetc() -> Returns EOF (-1)
+
+PERFORMANCE CONSIDERATION:
+    SLOW (Character-by-character reading):
+        while((c = fgetc(file)) != EOF) {
+            process(c);
+        }
+
+    FASTER (Buffer reading):
+        char buffer[4096];
+        while(fgets(buffer, sizeof(buffer), file) != NULL) {
+            process(buffer);
+        }
+
+KEY POINTS:
+    - Returns int to accommodate EOF special value
+    - Advances file position indicator by 1 byte
+    - Can be used to peek at the first character (with ungetc())
+    - Slower than buffered reading for large files
+    - Use feof() and ferror() to distinguish EOF from errors
+
+===============================================================================
+TOPIC 4: eof() - End-of-File Detection
+===============================================================================
+
+WHAT IS eof()?
+eof() is a function used to check whether the END-OF-FILE (EOF) CONDITION 
+has been reached during file input operations. In C, the equivalent function 
+is feof() for FILE* streams.
+
+TWO TYPES OF EOF FUNCTIONS:
+
+    1. C++ Stream Version (std::ifstream):
+        #include <fstream>
+
+        std::ifstream file("data.txt");
+        if (file.eof()) {
+            std::cout << "End of file reached\n";
+        }
+
+    2. C File Version (FILE*):
+        #include <stdio.h>
+
+        FILE *file = fopen("data.txt", "r");
+        if (feof(file)) {
+            printf("End of file reached\n");
+        }
+
+IMPORTANT: WHEN IS eof() TRUE?
+
+CRITICAL CONCEPT: eof() returns true ONLY AFTER a read operation attempts 
+to read BEYOND the end of the file.
+
+COMMON MISCONCEPTION EXAMPLE:
+    // WRONG LOGIC
+    FILE *file = fopen("data.txt", "r");
+    while(!feof(file)) {  // Checks EOF before reading
+        char buffer[100];
+        fgets(buffer, 100, file);  // Might read garbage on last iteration
+        printf("%s", buffer);
+    }
+
+    Problem: feof() is false even at the last valid character. The loop 
+    reads one extra time, processing garbage or duplicating the last line.
+
+CORRECT PATTERN:
+    // CORRECT LOGIC
+    FILE *file = fopen("data.txt", "r");
+    char buffer[100];
+
+    while(fgets(buffer, 100, file) != NULL) {  // Check return value
+        printf("%s", buffer);
+    }
+
+    fclose(file);
+
+VISUAL REPRESENTATION:
+    File Content: "AB"
+    Position:      0  1  2
+                   +--+--+
+                   |A |B |EOF
+                   +--+--+
+                   
+    Read #1: fgetc() -> 'A', feof() -> false
+    Read #2: fgetc() -> 'B', feof() -> false
+    Read #3: fgetc() -> EOF, feof() -> TRUE
+
+DETECTING READ ERRORS VS EOF:
+    FILE *file = fopen("data.txt", "r");
+    int c;
+
+    while((c = fgetc(file)) != EOF) {
+        putchar(c);
+    }
+
+    // Now determine WHY we stopped
+    if (feof(file)) {
+        printf("End of file reached normally\n");
+    } else if (ferror(file)) {
+        printf("Error occurred during reading\n");
+    }
+
+    fclose(file);
+
+EOF VALUE:
+    // EOF is a macro defined in <stdio.h>
+    #define EOF (-1)
+
+    // It's a negative integer value that cannot be a valid character
+    int c = fgetc(file);
+    if (c == EOF) {
+        // Could be end-of-file OR read error
+    }
+
+COMPARISON TABLE:
+    Aspect      feof()              Return Value Check
+    ------      ------              ------------------
+    Timing      After read fails    During read
+    Best for    Error distinction   Normal reading
+    Usage       if(feof(file))      if(fgets(...) != NULL)
+    Precision   Less precise        More precise
+
+PRACTICAL EXAMPLE: READING UNTIL EOF:
+    FILE *file = fopen("numbers.txt", "r");
+    int number;
+
+    // CORRECT: Check fscanf return value
+    while(fscanf(file, "%d", &number) == 1) {
+        printf("Read: %d\n", number);
+    }
+
+    // Now check why we stopped
+    if (feof(file)) {
+        printf("Finished reading all numbers\n");
+    } else {
+        printf("Error: Invalid data format\n");
+    }
+
+    fclose(file);
+
+KEY POINTS:
+    - feof() returns true ONLY AFTER attempting to read past EOF
+    - Never use while(!feof(file)) as a loop condition
+    - Always check read function return values instead
+    - Use feof() and ferror() together to diagnose why reading stopped
+    - EOF is typically defined as -1
+
+===============================================================================
+TOPIC 5: ungetc() - Pushing Characters Back
+===============================================================================
+
+WHAT IS ungetc()?
+ungetc() is a C standard library function that PUSHES A CHARACTER BACK into 
+an input stream, allowing it to be read again by the next read operation. 
+It's like "un-reading" a character.
+
+SYNTAX:
+    int ungetc(int ch, FILE* stream);
+
+PARAMETERS:
+    - ch: Character to push back (as int)
+    - stream: Pointer to the FILE object
+
+RETURN VALUE:
+    - Success: Returns the pushed character ch
+    - Failure: Returns EOF (if ch is EOF or operation fails)
+
+HOW ungetc() WORKS:
+
+    Visual Representation:
+        Stream: "Hello"
+        Position: |
+                 H e l l o
+
+        Step 1: int c = fgetc(file);  // Reads 'H'
+                Position: |
+                         H e l l o
+                           ^
+
+        Step 2: ungetc(c, file);      // Pushes 'H' back
+                Position: |
+                 H e l l o
+                 ^ (back to start)
+
+        Step 3: c = fgetc(file);      // Reads 'H' again
+
+PRACTICAL EXAMPLE from document_store.cpp:
+
+    Empty File Detection:
+        // Check if file is empty by peeking at first character
+        int c = fgetc(file);      // Read first character
+        if(c == EOF){             // File is empty
+            cout << "File is empty: " << file_name << endl;
+            fclose(file);
+            return -1;
+        }
+        ungetc(c, file);          // Put character back
+        // Now file position is back at start
+
+    Why This Pattern?
+        - We want to check if file is empty WITHOUT consuming its content
+        - fgetc() tells us if there's data (returns char) or not (returns EOF)
+        - ungetc() restores the file to its original state
+        - Subsequent getline() can read from the beginning
+
+ANOTHER USE CASE: TOKEN LOOKAHEAD
+
+    Parsing Numbers:
+        FILE *file = fopen("data.txt", "r");
+        int c;
+
+        while((c = fgetc(file)) != EOF) {
+            if(isdigit(c)) {
+                ungetc(c, file);  // Put digit back
+                int number;
+                fscanf(file, "%d", &number);  // Read full number
+                printf("Found number: %d\n", number);
+            }
+        }
+
+        fclose(file);
+
+IMPORTANT RULES AND LIMITATIONS:
+
+    1. Only One Pushback Guaranteed:
+        int c1 = fgetc(file);     // Read 'A'
+        int c2 = fgetc(file);     // Read 'B'
+
+        ungetc(c2, file);         // Push 'B' back - OK
+        ungetc(c1, file);         // Push 'A' back - NOT GUARANTEED
+                                  // Only 1 character pushback is portable
+
+    2. Cannot Push EOF:
+        ungetc(EOF, file);        // Does nothing, returns EOF
+
+    3. Affects File Position:
+        FILE *file = fopen("test.txt", "r");
+        long pos1 = ftell(file);      // Position: 0
+
+        int c = fgetc(file);          // Position: 1
+        long pos2 = ftell(file);      
+
+        ungetc(c, file);              // Position: back to 0
+        long pos3 = ftell(file);      
+
+        printf("Pos: %ld -> %ld -> %ld\n", pos1, pos2, pos3);
+        // Output: Pos: 0 -> 1 -> 0
+
+COMPARISON WITH OTHER METHODS:
+    Method                      Purpose           Modifies File?  Efficiency
+    ------                      -------           --------------  ----------
+    ungetc()                    Push back 1 char  No              Fast
+    fseek(file, -1, SEEK_CUR)   Move back 1 byte  No              Medium
+    Read into buffer            Store chars       No              Slow (memory)
+
+COMMON PITFALL: BINARY FILES
+    // WARNING: ungetc() on binary files
+    FILE *file = fopen("image.png", "rb");
+    int byte = fgetc(file);
+    ungetc(byte, file);  // Works, but use fseek() for binary
+                          // fseek() is more reliable for binary data
+
+KEY POINTS:
+    - ungetc() allows "peeking" at next character without consuming it
+    - Only ONE CHARACTER pushback is guaranteed by C standard
+    - Cannot push back EOF
+    - Perfect for checking file emptiness before reading
+    - Updates file position indicator backwards
+    - Alternative: use fseek(file, -1, SEEK_CUR) for moving back
+
+===============================================================================
+TOPIC 6: size_t - Unsigned Integer Type
+===============================================================================
+
+WHAT IS size_t?
+size_t is an UNSIGNED INTEGER DATA TYPE defined in the C/C++ standard library 
+specifically designed to represent the SIZE OF OBJECTS in bytes. It's 
+guaranteed to be large enough to hold the size of the largest possible 
+object on the system.
+
+DECLARATION:
+    #include <cstddef>  // C++
+    #include <stddef.h> // C
+
+    size_t size = sizeof(int);
+
+WHY size_t EXISTS?
+
+    Portability Problem:
+        // NON-PORTABLE: Assumes int can hold any size
+        int size = sizeof(large_array);  
+        // On 64-bit systems, arrays can be > 4GB
+        // int max: 2,147,483,647 (~ 2GB)
+        // This will overflow!
+
+        // PORTABLE: size_t adjusts to platform
+        size_t size = sizeof(large_array);
+        // On 32-bit: size_t is 32-bit (max 4GB)
+        // On 64-bit: size_t is 64-bit (max 16 exabytes)
+
+PLATFORM SIZES:
+    Platform    size_t Size    Maximum Value
+    --------    -----------    -------------
+    32-bit      4 bytes        4,294,967,295 (~ 4GB)
+    64-bit      8 bytes        18,446,744,073,709,551,615 (~ 16 EB)
+
+COMMON USES OF size_t:
+
+    1. sizeof Operator:
+        size_t int_size = sizeof(int);          // 4 bytes
+        size_t array_size = sizeof(int) * 100;  // 400 bytes
+
+    2. String Length:
+        #include <cstring>
+
+        char str[] = "Hello";
+        size_t length = strlen(str);  // Returns size_t (5)
+
+    3. Array Indexing:
+        int numbers[100];
+        for(size_t i = 0; i < 100; i++) {
+            numbers[i] = i;
+        }
+
+    4. Memory Allocation:
+        #include <cstdlib>
+
+        size_t num_bytes = 1024;
+        char *buffer = (char*)malloc(num_bytes);
+        free(buffer);
+
+PRACTICAL EXAMPLE from document_store.cpp:
+    size_t len = 0;  // Used with getline()
+    char *line = NULL;
+    ssize_t current_length;
+
+    // getline() expects size_t* for buffer size
+    while((current_length = getline(&line, &len, file)) != -1) {
+        // len is updated by getline() with buffer size
+        // current_length is the actual line length read
+    }
+
+size_t VS int: KEY DIFFERENCES:
+    Aspect              size_t              int
+    ------              ------              ---
+    Signed              No (unsigned)       Yes (signed)
+    Negative values     Cannot represent    Can represent
+    Size                Platform-dependent  Usually 4 bytes
+    Purpose             Sizes, counts       General numbers
+    Example             100 elements        -50 temperature
+
+COMMON size_t MISTAKE: UNDERFLOW:
+    // DANGER: Unsigned underflow
+    size_t a = 5;
+    size_t b = 10;
+    size_t result = a - b;  // Wraps around!
+    // result = 18,446,744,073,709,551,611 (not -5!)
+
+    printf("%zu\n", result);  // Huge positive number
+
+    Visual Representation:
+        Unsigned Integer Wheel (size_t):
+            MAX VALUE
+                ^
+          ...  |  ...
+           2   |   MAX-2
+           1   |   MAX-1
+           0 --|-- MAX
+           
+        5 - 10 wraps around:
+        5 -> 4 -> 3 -> 2 -> 1 -> 0 -> MAX -> MAX-1 -> ... -> MAX-4
+                                (wraps to huge positive)
+
+SAFE COMPARISON WITH SIGNED INTEGERS:
+    int signed_num = -5;
+    size_t unsigned_num = 10;
+
+    // WRONG: Dangerous comparison
+    if(signed_num < unsigned_num) {  
+        // signed_num is converted to size_t
+        // -5 becomes huge positive number!
+        // Condition is FALSE (unexpected)
+    }
+
+    // CORRECT: Cast size_t to int
+    if(signed_num < (int)unsigned_num) {
+        // Now both are signed
+        // Condition is TRUE (expected)
+    }
+
+RELATED TYPES:
+    #include <cstddef>
+
+    size_t      // Unsigned size type
+    ssize_t     // Signed size type (POSIX, not standard C++)
+    ptrdiff_t   // Signed type for pointer differences
+
+    Example:
+        char *start = buffer;
+        char *end = buffer + 100;
+        ptrdiff_t distance = end - start;  // 100
+
+PRINTF/SCANF FORMAT SPECIFIERS:
+    size_t value = 42;
+
+    // CORRECT format specifiers
+    printf("%zu\n", value);   // C99/C++11: size_t
+    printf("%zx\n", value);   // Hexadecimal size_t
+
+    // WRONG (common mistake)
+    printf("%d\n", value);    // Treats size_t as int - unsafe!
+    printf("%lu\n", value);   // Treats size_t as long - not portable!
+
+WHEN NOT TO USE size_t:
+    // Don't use for negative values
+    size_t temperature = -10;  // Wraps to huge positive!
+
+    // Don't use for loop counts that go backwards
+    for(size_t i = 10; i >= 0; i--) {  // Infinite loop!
+        // i never goes negative, wraps to MAX at i-1 when i=0
+    }
+
+    // Use int for these cases
+    int temperature = -10;  // OK
+    for(int i = 10; i >= 0; i--) {  // OK
+
+KEY POINTS:
+    - size_t is UNSIGNED - cannot represent negative values
+    - Automatically adjusts size on different platforms (32-bit vs 64-bit)
+    - Used by sizeof, strlen, malloc, and similar functions
+    - Beware of underflow: subtracting larger from smaller wraps around
+    - Use %zu format specifier with printf
+    - Use int or ptrdiff_t if negative values are possible
+
+===============================================================================
+TOPIC 7: getline() - Reading Lines (POSIX)
+===============================================================================
+
+WHAT IS getline()?
+getline() is a POSIX FUNCTION (not standard C) that reads an entire line 
+from a file stream, including the newline character. It automatically 
+allocates memory for the line, making it convenient for reading lines of 
+unknown length.
+
+SYNTAX:
+    ssize_t getline(char **lineptr, size_t *n, FILE *stream);
+
+PARAMETERS:
+    - lineptr: Pointer to buffer (allocated automatically by getline())
+    - n: Pointer to buffer size (updated by getline())
+    - stream: File stream to read from
+
+RETURN VALUE:
+    - Success: Returns number of characters read (including newline, excluding null terminator)
+    - EOF or Error: Returns -1
+
+HOW getline() WORKS:
+
+    Memory Management:
+        char *line = NULL;    // Start with NULL pointer
+        size_t len = 0;       // Start with 0 size
+        ssize_t read;
+
+        // First call: getline() allocates memory
+        read = getline(&line, &len, file);
+        // After: line points to malloc'd buffer, len = buffer size
+
+        // Subsequent calls: getline() reuses or expands buffer
+        read = getline(&line, &len, file);
+
+        // Must free when done
+        free(line);
+
+VISUAL REPRESENTATION:
+    Before getline():          After getline():
+    line = NULL               line --> +---+---+---+---+---+---+
+    len = 0                            | H | e | y |\n | \0|   |
+                                       +---+---+---+---+---+---+
+                              len = 6 (buffer capacity)
+                              read = 4 (actual characters including \n)
+
+PRACTICAL EXAMPLE from document_store.cpp:
+    FILE *file = fopen(file_name, "r");
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t current_length;
+
+    // Read lines until EOF
+    while((current_length = getline(&line, &len, file)) != -1) {
+        *linecounter = *linecounter + 1;  // Count lines
+        
+        // Remove newline from length calculation
+        if(line[current_length-1] == '\n') {
+            current_length--;
+        }
+        
+        // Track maximum line length
+        if(current_length > *maxlength) {
+            *maxlength = current_length;
+        }
+    }
+
+    free(line);   // Must free allocated memory
+    fclose(file);
+
+KEY FEATURES:
+
+    1. Automatic Memory Allocation:
+        // getline() manages memory automatically
+        char *line = NULL;
+        size_t len = 0;
+        getline(&line, &len, file);  // Allocates memory
+
+        // fgets() requires pre-allocated buffer
+        char buffer[256];
+        fgets(buffer, 256, file);  // Limited to 256 chars
+
+    2. Handles Arbitrary Line Length:
+        // getline() can read lines of ANY length
+        // It automatically expands buffer if needed
+
+        // Read 10-character line: allocates 10+ bytes
+        // Read 10,000-character line: expands to 10,000+ bytes
+
+    3. Includes Newline Character:
+        char *line = NULL;
+        size_t len = 0;
+        ssize_t read = getline(&line, &len, file);
+
+        // If file contains: "Hello\n"
+        // line = "Hello\n\0"  (newline included)
+        // read = 6
+
+        // To remove newline:
+        if(read > 0 && line[read-1] == '\n') {
+            line[read-1] = '\0';  // Replace \n with \0
+        }
+
+getline() VS fgets():
+    Feature         getline()           fgets()
+    -------         ---------           -------
+    Standard        POSIX only          C Standard
+    Buffer size     Auto-managed        Fixed size
+    Line length     Unlimited           Limited by buffer
+    Newline         Included            Included
+    Memory          Auto malloc()       Pre-allocated
+    Portability     Linux/Unix/MinGW    All platforms
+
+COMPARISON EXAMPLE:
+
+    Using fgets():
+        char buffer[100];
+        if(fgets(buffer, 100, file) != NULL) {
+            // Can only read 99 characters
+            // Long lines are truncated
+        }
+
+    Using getline():
+        char *line = NULL;
+        size_t len = 0;
+        if(getline(&line, &len, file) != -1) {
+            // Can read lines of any length
+            // No truncation
+        }
+        free(line);
+
+IMPORTANT USAGE RULES:
+
+    1. Initialize Pointers Correctly:
+        // CORRECT
+        char *line = NULL;
+        size_t len = 0;
+        getline(&line, &len, file);
+
+        // WRONG: Uninitialized
+        char *line;        // Contains garbage
+        size_t len;        // Contains garbage
+        getline(&line, &len, file);  // Undefined behavior!
+
+    2. Always Free Memory:
+        char *line = NULL;
+        size_t len = 0;
+
+        while(getline(&line, &len, file) != -1) {
+            // Process line
+        }
+
+        free(line);  // Must free to avoid memory leak
+
+    3. Reusing the Buffer:
+        char *line = NULL;
+        size_t len = 0;
+
+        // First getline: allocates new buffer
+        getline(&line, &len, file);  // Allocates 64 bytes
+
+        // Second getline: reuses buffer if big enough
+        getline(&line, &len, file);  // Reuses 64 bytes
+
+        // Third getline: expands if line is longer
+        getline(&line, &len, file);  // Expands to 128 bytes
+
+        free(line);  // Free once at the end
+
+RETURN VALUE EXPLAINED:
+    ssize_t read = getline(&line, &len, file);
+
+    // read = 5  -> Read 5 characters (including \n)
+    // read = 0  -> Empty line (just \n)
+    // read = -1 -> EOF or error
+
+    if(read == -1) {
+        if(feof(file)) {
+            // End of file
+        } else if(ferror(file)) {
+            // Read error
+        }
+    }
+
+KEY POINTS:
+    - getline() is a POSIX function (available on Linux, Unix, Windows with MinGW)
+    - Automatically allocates and manages memory for the line buffer
+    - Returns number of characters read (including newline)
+    - Returns -1 on EOF or error
+    - Must initialize lineptr to NULL and n to 0 for first call
+    - Must free() the allocated memory when done
+    - Includes newline character in the returned string
+    - Can read lines of arbitrary length (no truncation)
+
+===============================================================================
+TOPIC 8: getline() Windows Problem & Solutions
+===============================================================================
+
+THE PROBLEM: getline() HANGS ON EMPTY FILES (Windows)
+
+What Happens?
+On Windows systems with POSIX compatibility layers (like MinGW, Cygwin), 
+getline() has a CRITICAL BUG: it HANGS INDEFINITELY when called on an 
+EMPTY FILE instead of returning -1.
+
+    Problematic Code (Windows):
+        FILE *file = fopen("empty.txt", "r");  // File has 0 bytes
+        char *line = NULL;
+        size_t len = 0;
+
+        while(getline(&line, &len, file) != -1) {  // HANGS HERE! 
+            // Never executes
+        }
+        // Program freezes forever
+
+WHY THIS HAPPENS?
+
+    Expected Behavior (POSIX Standard):
+        Empty file -> fgetc() returns EOF -> getline() returns -1 ✓
+
+    Actual Behavior (Windows POSIX layer):
+        Empty file -> getline() waits for input -> never returns ❌
+
+    Root Cause: Windows implementation of getline() doesn't properly check 
+    for EOF condition before attempting to read, causing it to wait for 
+    data that will never arrive.
+
+VISUAL REPRESENTATION:
+    Linux/Unix:                      Windows (MinGW):
+    +-----------+                    +-----------+
+    | Empty File|                    | Empty File|
+    +-----------+                    +-----------+
+          |                                |
+      getline()                        getline()
+          |                                |
+      Check EOF                         Wait for data...
+          |                                |
+      Return -1 ✓                      [HANGS] ❌
+
+-------------------------------------------------------------------------------
+SOLUTIONS TO EMPTY FILE PROBLEM
+-------------------------------------------------------------------------------
+
+SOLUTION 1: Check File Empty Before getline() (RECOMMENDED)
+
+    Method A: Using fgetc() and ungetc() (Simplest):
+        FILE *file = fopen(file_name, "r");
+        if(file == NULL) {
+            return -1;
+        }
+
+        // Check if file is empty
+        int c = fgetc(file);
+        if(c == EOF){
+            cout << "File is empty: " << file_name << endl;
+            fclose(file);
+            return -1;
+        }
+        ungetc(c, file);  // Put character back
+
+        // Now safe to use getline()
+        char *line = NULL;
+        size_t len = 0;
+        while(getline(&line, &len, file) != -1) {
+            // Process line
+        }
+
+        free(line);
+        fclose(file);
+
+    Why This Works:
+        - fgetc() reliably returns EOF on empty files (even on Windows)
+        - ungetc() puts the character back so file position is unchanged
+        - Only 3 lines of simple code
+        - Beginner-friendliness: 10/10
+
+SOLUTION 2: Use fseek() and ftell():
+    FILE *file = fopen(file_name, "r");
+    if(file == NULL) {
+        return -1;
+    }
+
+    // Check file size
+    fseek(file, 0, SEEK_END);    // Go to end
+    long size = ftell(file);     // Get position (= file size)
+    rewind(file);                // Go back to start
+
+    if(size == 0){
+        cout << "File is empty: " << file_name << endl;
+        fclose(file);
+        return -1;
+    }
+
+    // Now safe to use getline()
+
+    Pros: Reliable on all platforms, Gets exact file size
+    Cons: More complex (4 function calls)
+    Beginner-friendliness: 6/10
+
+SOLUTION 3: Use stat() System Call:
+    #include <sys/stat.h>
+
+    FILE *file = fopen(file_name, "r");
+    struct stat file_stat;
+    if(stat(file_name, &file_stat) == 0) {
+        if(file_stat.st_size == 0) {
+            cout << "File is empty: " << file_name << endl;
+            fclose(file);
+            return -1;
+        }
+    }
+
+    Pros: Most efficient (no file reading needed)
+    Cons: Requires understanding of structs and system calls
+    Beginner-friendliness: 4/10
+
+SOLUTION 4: Replace getline() with fgets() (BEST for Portability):
+    FILE *file = fopen(file_name, "r");
+    char buffer[4096];  // Fixed-size buffer
+
+    // fgets() returns NULL on empty file (no hang)
+    while(fgets(buffer, sizeof(buffer), file) != NULL) {
+        int current_length = strlen(buffer);
+        
+        // Remove newline
+        if(current_length > 0 && buffer[current_length-1] == '\n') {
+            current_length--;
+        }
+        
+        *linecounter = *linecounter + 1;
+        if(current_length > *maxlength) {
+            *maxlength = current_length;
+        }
+    }
+
+    fclose(file);
+
+    Pros: fgets() is standard C (works everywhere), No empty file bug
+    Cons: Limited buffer size (truncates very long lines)
+    Beginner-friendliness: 9/10
+
+COMPARISON TABLE:
+    Solution         Lines of Code    Complexity    Beginner-Friendly
+    --------         -------------    ----------    -----------------
+    fgetc/ungetc     3                Low           ★★★★★ (10/10)
+    fseek/ftell      4                Medium        ★★★ (6/10)
+    stat()           5+               High          ★★ (4/10)
+    fgets() instead  Replace fn       Low           ★★★★ (9/10)
+
+OUR IMPLEMENTATION CHOICE:
+We chose fgetc()/ungetc() method because:
+    1. Simplest code (3 lines)
+    2. Easy to understand for beginners
+    3. No complex system calls or structs
+    4. Reliable on all platforms
+    5. Doesn't change file position after check
+    6. Perfect for our use case
+
+    Final implementation in document_store.cpp:
+        int c = fgetc(file);
+        if(c == EOF){
+            cout << "File is empty: " << file_name << endl;
+            fclose(file);
+            return -1;
+        }
+        ungetc(c, file);
+
+PLATFORM COMPATIBILITY SUMMARY:
+    Platform            getline() Bug    fgetc/ungetc Works    fgets() Works
+    --------            -------------    ------------------    -------------
+    Linux               No bug           Yes                   Yes
+    macOS               No bug           Yes                   Yes
+    Windows (MinGW)     HAS BUG          Yes                   Yes
+    Windows (Cygwin)    HAS BUG          Yes                   Yes
+    Windows (MSVC)      No getline()     N/A                   Yes
+
+KEY POINTS:
+    - getline() hangs on empty files in Windows POSIX implementations
+    - Always check for empty files BEFORE calling getline() on Windows
+    - Best simple solution: Use fgetc() to peek, then ungetc() to restore
+    - Best portable solution: Replace getline() with fgets()
+    - feof() doesn't work for this check (returns false before first read)
+    - The bug only affects Windows - Linux/Unix work correctly
+
+===============================================================================
+TOPIC 9: free() - Deallocating Memory
+===============================================================================
+
+WHAT IS free()?
+free() is a C standard library function used to DEALLOCATE MEMORY that was 
+previously allocated dynamically using malloc(), calloc(), or realloc(). 
+It returns the memory to the system for reuse.
+
+SYNTAX:
+    void free(void *ptr);
+
+PARAMETERS:
+    - ptr: Pointer to memory block to deallocate
+
+RETURN VALUE:
+    - None (void)
+
+WHY free() IS CRITICAL?
+
+    Memory Leak Without free():
+        // MEMORY LEAK
+        for(int i = 0; i < 1000000; i++) {
+            char *buffer = (char*)malloc(1024);  // Allocate 1 KB
+            // ... use buffer ...
+            // Missing free(buffer)
+            // Leaks 1 KB per iteration = 1 GB total!
+        }
+
+    Proper Memory Management:
+        // CORRECT
+        for(int i = 0; i < 1000000; i++) {
+            char *buffer = (char*)malloc(1024);  // Allocate 1 KB
+            // ... use buffer ...
+            free(buffer);  // Deallocate 1 KB
+            // Memory is reused
+        }
+
+PRACTICAL EXAMPLE from document_store.cpp:
+    char *line = NULL;
+    size_t len = 0;
+
+    // getline() allocates memory for line
+    while(getline(&line, &len, file) != -1) {
+        // line points to dynamically allocated memory
+        // ... process line ...
+    }
+
+    // Must free the allocated memory
+    free(line);  // Returns memory to system
+    fclose(file);
+
+HOW MEMORY ALLOCATION WORKS:
+
+    Program Memory:
+    +----------------+
+    |  Stack         | <- Local variables (automatic)
+    |  int x;        |
+    |  char c;       |
+    +----------------+
+    |  | grows down  |
+    |                |
+    |  ^ grows up    |
+    +----------------+
+    |  Heap          | <- Dynamic memory (manual)
+    |  malloc()      |
+    |  getline()     |
+    +----------------+
+    |  Global/Static | <- Global variables
+    +----------------+
+    |  Code          | <- Program instructions
+    +----------------+
+
+    malloc() and free():
+        Step 1: char *ptr = malloc(100);
+                Heap: [===== allocated 100 bytes =====]
+                      ptr -> [___|___|___| ... |___]
+                      
+        Step 2: ... use ptr ...
+                ptr[0] = 'A';
+                ptr -> [_A_|___|___| ... |___]
+
+        Step 3: free(ptr);
+                Heap: [_____ freed 100 bytes _____]
+                ptr still contains address but is INVALID
+
+IMPORTANT RULES FOR free():
+
+    1. Only Free Dynamically Allocated Memory:
+        // CORRECT: Free malloc'd memory
+        char *p1 = (char*)malloc(100);
+        free(p1);
+
+        // WRONG: Don't free stack memory
+        char buffer[100];
+        free(buffer);  // CRASH! Not from malloc()
+
+        // WRONG: Don't free string literals
+        char *str = "Hello";
+        free(str);  // CRASH! Not from malloc()
+
+    2. Don't Use Pointer After free():
+        char *buffer = (char*)malloc(100);
+        buffer[0] = 'A';  // OK
+
+        free(buffer);     // Memory deallocated
+
+        buffer[0] = 'B';  // UNDEFINED BEHAVIOR!
+        // Memory might be reused by other code
+        printf("%c", buffer[0]);  // UNDEFINED BEHAVIOR!
+
+    3. Don't free() Twice:
+        char *buffer = (char*)malloc(100);
+        free(buffer);     // First free - OK
+        free(buffer);     // DOUBLE FREE - CRASH!
+
+    4. free(NULL) is Safe:
+        char *ptr = NULL;
+        free(ptr);  // Does nothing, safe
+
+COMPLETE malloc/free LIFECYCLE:
+    // 1. Allocate memory
+    char *line = NULL;
+    size_t len = 0;
+
+    // 2. getline() internally calls malloc
+    ssize_t read = getline(&line, &len, file);
+    // Now: line -> [memory allocated by getline]
+
+    // 3. Use the memory
+    if(read != -1) {
+        printf("%s", line);
+    }
+
+    // 4. Free when done
+    free(line);  // Return memory to system
+    line = NULL; // Good practice: set to NULL after free
+
+MEMORY LEAK DETECTION EXAMPLE:
+
+    Without free():
+        void process_file(const char *filename) {
+            FILE *file = fopen(filename, "r");
+            char *line = NULL;
+            size_t len = 0;
+            
+            while(getline(&line, &len, file) != -1) {
+                // Process line
+            }
+            
+            fclose(file);
+            // Forgot free(line) - MEMORY LEAK!
+        }
+
+        // Call this 100 times -> 100 memory leaks
+        for(int i = 0; i < 100; i++) {
+            process_file("document.txt");
+        }
+
+    With free():
+        void process_file(const char *filename) {
+            FILE *file = fopen(filename, "r");
+            char *line = NULL;
+            size_t len = 0;
+            
+            while(getline(&line, &len, file) != -1) {
+                // Process line
+            }
+            
+            free(line);  // Properly deallocate
+            fclose(file);
+        }
+
+        // Call this 100 times -> no memory leaks
+
+BEST PRACTICES:
+
+    1. Set Pointer to NULL After free():
+        free(buffer);
+        buffer = NULL;  // Prevents accidental use after free
+
+    2. Check malloc() Return Value:
+        char *buffer = (char*)malloc(1024);
+        if(buffer == NULL) {
+            fprintf(stderr, "Out of memory!\n");
+            return -1;
+        }
+        // Use buffer
+        free(buffer);
+
+    3. Match Every malloc with free:
+        // CORRECT: Balanced malloc/free
+        void function() {
+            char *p = malloc(100);  // Allocate
+            // ... use p ...
+            free(p);                // Deallocate
+        }
+
+        // WRONG: Missing free
+        void function() {
+            char *p = malloc(100);  // Allocate
+            // ... use p ...
+            // Missing free(p) - MEMORY LEAK!
+        }
+
+KEY POINTS:
+    - free() deallocates memory allocated by malloc(), calloc(), or realloc()
+    - Always free() dynamically allocated memory to prevent memory leaks
+    - Only free() pointers that came from dynamic allocation
+    - Don't use memory after calling free() (undefined behavior)
+    - Don't call free() twice on the same pointer (double free error)
+    - free(NULL) is safe and does nothing
+    - getline() allocates memory that MUST be freed with free()
+    - Set pointers to NULL after freeing (best practice)
+    - In C++, prefer smart pointers (std::unique_ptr, std::shared_ptr)
+
+===============================================================================
+SUMMARY
+===============================================================================
+
+This document covered all essential C file I/O functions used in 
+document_store.cpp:
+
+1. fopen(): Opens files with various modes (read, write, append)
+2. fclose(): Closes files and flushes buffers to disk
+3. fgetc(): Reads one character at a time from files
+4. eof(): Detects end-of-file condition (after read fails)
+5. ungetc(): Pushes character back to stream (peek functionality)
+6. size_t: Unsigned integer type for sizes and counts
+7. getline(): POSIX function for reading entire lines dynamically
+8. Windows Bug: getline() hangs on empty files - solution: check first with fgetc()
+9. free(): Deallocates dynamically allocated memory
+
+KEY TAKEAWAYS FOR BEGINNERS:
+    - Always check return values (NULL, -1, EOF) before using results
+    - Match every fopen() with fclose()
+    - Match every malloc()/getline() with free()
+    - Initialize pointers to NULL before use
+    - Use size_t for sizes and counts (not int)
+    - Check for empty files before getline() on Windows
+    - Understand the difference between stack and heap memory
+
+===============================================================================
+Document Version: 1.0
+Last Updated: December 23, 2025
+Author: High-Performance Search Engine Project
+Repository: github.com/adarshpheonix2810/high-performance-search-engine-cpp
+===============================================================================
