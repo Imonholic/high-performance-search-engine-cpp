@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
         return -1;
     }
     
-    if(read_file(&linecounter, &maxlength,argv[2]) == -1){
+    if(read_sizes(&linecounter, &maxlength,argv[2]) == -1){
         return -1;
     }
     cout<<"File read successfully. Lines: " << linecounter << ", Max Length: " << maxlength << endl;
