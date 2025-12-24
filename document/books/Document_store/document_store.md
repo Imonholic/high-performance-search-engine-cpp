@@ -14,6 +14,7 @@ This document provides comprehensive explanations of all C file I/O functions an
 7. [getline() - Reading Lines (POSIX)](#topic-7-getline---reading-lines-posix)
 8. [getline() Windows Problem & Solutions](#topic-8-getline-windows-problem--solutions)
 9. [free() - Deallocating Memory](#topic-9-free---deallocating-memory)
+10. [read_input() - Loading Documents into Map](#topic-10-read_input---loading-documents-into-map)
 
 ---
 
@@ -1683,6 +1684,7 @@ This document covered all essential C file I/O functions used in `document_store
 7. **getline()**: POSIX function for reading entire lines dynamically
 8. **Windows Bug**: getline() hangs on empty files - solution: check first with fgetc()
 9. **free()**: Deallocates dynamically allocated memory
+10. **read_input()**: Reads file line-by-line and inserts into Mymap container
 
 ### Key Takeaways for Beginners
 
@@ -1693,10 +1695,539 @@ This document covered all essential C file I/O functions used in `document_store
 - Use `size_t` for sizes and counts (not `int`)
 - Check for empty files before `getline()` on Windows
 - Understand the difference between stack and heap memory
+- Clean up resources on error (close files, free memory)
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 23, 2025  
+## Topic 10: read_input() - Loading Documents into Map
+
+### What is read_input()?
+`read_input()` is a **custom function** in our search engine that reads a file line-by-line and inserts each line as a document into a `Mymap` object. It combines file I/O operations with our custom data structure.
+
+### Function Signature
+```cpp
+int read_input(Mymap* mymap, char* file_name);
+```
+
+### Parameters
+- **mymap**: Pointer to Mymap object where documents will be stored
+- **file_name**: Path to the file to read
+
+### Return Value
+- **1**: Success - all lines read and inserted
+- **-1**: Error - file opening failed, insertion failed, or other error
+
+---
+
+### Code Implementation
+
+```cpp
+int read_input(Mymap* mymap, char* file_name){
+    FILE *file = fopen(file_name, "r");
+    char *line = NULL;
+    size_t buffersize = 0;
+    int current_length;
+    
+    for(int i=0; i<mymap->get_size(); i++){
+        getline(&line, &buffersize, file);
+        if (mymap->insert(line, i) == -1) {
+            cout << "Error inserting line " << endl;
+            free(line);
+            fclose(file);
+            return -1;
+        }
+        free(line);
+        line = NULL;
+        buffersize = 0;
+    }
+    free(line);
+    fclose(file);
+    return 1;
+}
+```
+
+---
+
+### Step-by-Step Breakdown
+
+#### Step 1: Open File
+```cpp
+FILE *file = fopen(file_name, "r");
+```
+
+**What it does:**
+- Opens file for reading
+- Returns `FILE*` pointer
+
+**Note:** ⚠️ **Missing NULL check!** Should add:
+```cpp
+if(file == NULL) {
+    cout << "Cannot open file: " << file_name << endl;
+    return -1;
+}
+```
+
+---
+
+#### Step 2: Initialize Variables
+```cpp
+char *line = NULL;
+size_t buffersize = 0;
+int current_length;
+```
+
+**Variables explained:**
+
+| Variable | Type | Purpose |
+|----------|------|---------|
+| `line` | `char*` | Pointer to line buffer (allocated by getline) |
+| `buffersize` | `size_t` | Size of allocated buffer |
+| `current_length` | `int` | Length of line read (unused in current code) |
+
+**Why initialize to NULL/0?**
+- `getline()` needs to know if buffer is already allocated
+- `NULL` tells getline to allocate new buffer
+- Safe default values
+
+---
+
+#### Step 3: Loop Through Documents
+```cpp
+for(int i=0; i<mymap->get_size(); i++){
+```
+
+**What it does:**
+- Iterates through all document slots in the map
+- `mymap->get_size()` returns total capacity
+- Each iteration reads one line
+
+**Example:**
+```cpp
+Mymap has size 7
+Loop runs: i=0, i=1, i=2, i=3, i=4, i=5, i=6
+Reads 7 lines from file
+```
+
+---
+
+#### Step 4: Read Line
+```cpp
+getline(&line, &buffersize, file);
+```
+
+**What happens:**
+- Reads next line from file (including newline)
+- Allocates/reallocates buffer if needed
+- Stores line in `line` pointer
+- Updates `buffersize` with buffer size
+
+**Example:**
+```
+File content:
+"Hello World\n"
+"Search Engine\n"
+
+First call: line = "Hello World\n", buffersize = 13
+Second call: line = "Search Engine\n", buffersize = 15
+```
+
+**Memory management:**
+- `getline()` allocates memory automatically
+- We must free it later with `free(line)`
+
+---
+
+#### Step 5: Insert Line into Map
+```cpp
+if (mymap->insert(line, i) == -1) {
+    cout << "Error inserting line " << endl;
+    free(line);
+    fclose(file);
+    return -1;
+}
+```
+
+**What happens:**
+
+1. **Call insert()**: Tries to insert line at index `i`
+2. **Check return value**: `-1` means error
+3. **On error**:
+   - Print error message
+   - Free the line buffer
+   - Close the file
+   - Return error code
+
+**Why cleanup on error?**
+- Prevents memory leaks
+- Closes file properly
+- Leaves system in clean state
+
+**Example error scenarios:**
+```
+- Line is NULL (shouldn't happen with getline)
+- Index out of bounds (shouldn't happen with correct loop)
+- Memory allocation fails in insert()
+```
+
+---
+
+#### Step 6: Clean Up After Each Line
+```cpp
+free(line);
+line = NULL;
+buffersize = 0;
+```
+
+**Why do this?**
+
+1. **`free(line)`**: Deallocates buffer allocated by getline
+2. **`line = NULL`**: Reset pointer for next getline call
+3. **`buffersize = 0`**: Reset size for next allocation
+
+**Why reset to NULL?**
+```cpp
+// Without reset:
+getline(&line, &buffersize, file);  // First call
+free(line);
+getline(&line, &buffersize, file);  // Second call
+// Uses freed pointer! 💥 CRASH!
+
+// With reset:
+getline(&line, &buffersize, file);  // First call
+free(line);
+line = NULL;
+buffersize = 0;
+getline(&line, &buffersize, file);  // Second call
+// Allocates new buffer ✅ Safe!
+```
+
+---
+
+#### Step 7: Final Cleanup
+```cpp
+free(line);
+fclose(file);
+return 1;
+```
+
+**Why final free()?**
+- Safety measure
+- In case loop didn't run or last iteration allocated
+- `free(NULL)` is safe (does nothing)
+
+**Why fclose()?**
+- Closes file handle
+- Flushes buffers
+- Releases system resources
+
+**Return 1:**
+- Indicates success
+- All lines read and inserted successfully
+
+---
+
+### Visual Execution Flow
+
+```
+START
+  ↓
+[1] Open file for reading
+  ↓
+[2] Initialize: line=NULL, buffersize=0
+  ↓
+[3] Loop: i=0 to size-1
+  ↓
+  [4] Read line from file (getline allocates memory)
+  ↓
+  [5] Insert line into mymap[i]
+  ↓
+  [6] Check if insert succeeded
+    ├─ Error → Clean up → Return -1
+    └─ Success → Continue
+  ↓
+  [7] Free line buffer
+  ↓
+  [8] Reset line=NULL, buffersize=0
+  ↓
+[9] Repeat for next line
+  ↓
+[10] All lines processed
+  ↓
+[11] Final cleanup (free, fclose)
+  ↓
+[12] Return 1 (success)
+  ↓
+END
+```
+
+---
+
+### Complete Example
+
+**File (doc1.txt):**
+```
+Introduction to Search Engines
+A search engine is a software system
+It crawls web pages
+```
+
+**Code:**
+```cpp
+Mymap* map = new Mymap(3, 100);
+int result = read_input(map, "doc1.txt");
+```
+
+**Execution trace:**
+
+```
+Step 1: Open "doc1.txt" ✅
+Step 2: line=NULL, buffersize=0
+
+Step 3: Loop i=0
+  getline() → line = "Introduction to Search Engines\n"
+              buffersize = 32
+  
+  insert(line, 0) → Trims, allocates, copies
+                  → map->documents[0] = "Introduction to Search Engines"
+                  → Returns 1 ✅
+  
+  free(line) → Buffer freed
+  line = NULL, buffersize = 0
+
+Step 4: Loop i=1
+  getline() → line = "A search engine is a software system\n"
+              buffersize = 38
+  
+  insert(line, 1) → map->documents[1] = "A search engine is a software system"
+                  → Returns 1 ✅
+  
+  free(line) → Buffer freed
+  line = NULL, buffersize = 0
+
+Step 5: Loop i=2
+  getline() → line = "It crawls web pages\n"
+              buffersize = 21
+  
+  insert(line, 2) → map->documents[2] = "It crawls web pages"
+                  → Returns 1 ✅
+  
+  free(line) → Buffer freed
+  line = NULL, buffersize = 0
+
+Step 6: Loop complete
+  free(line) → (NULL, does nothing)
+  fclose(file) → File closed
+  return 1
+
+Result: All 3 lines successfully loaded into map! ✅
+```
+
+---
+
+### Memory Management Details
+
+**Memory allocation pattern:**
+
+```
+Iteration 0:
+  Before getline: line = NULL
+  After getline:  line = [allocated buffer]
+  After free:     line = NULL
+
+Iteration 1:
+  Before getline: line = NULL
+  After getline:  line = [NEW allocated buffer]
+  After free:     line = NULL
+
+Iteration 2:
+  Before getline: line = NULL
+  After getline:  line = [NEW allocated buffer]
+  After free:     line = NULL
+```
+
+**Why reset matters:**
+- Each getline allocates a NEW buffer
+- Old buffer must be freed first
+- Reset ensures getline knows to allocate new memory
+
+---
+
+### Potential Issues and Improvements
+
+#### Issue 1: No NULL Check on fopen
+
+**Current code:**
+```cpp
+FILE *file = fopen(file_name, "r");
+// No check!
+for(int i=0; i<mymap->get_size(); i++){
+    getline(&line, &buffersize, file);  // Crash if file is NULL!
+```
+
+**Improved code:**
+```cpp
+FILE *file = fopen(file_name, "r");
+if(file == NULL){
+    cout << "Cannot open file: " << file_name << endl;
+    return -1;
+}
+```
+
+---
+
+#### Issue 2: current_length Unused
+
+**Current code:**
+```cpp
+int current_length;  // Declared but never used
+```
+
+**Can remove:**
+```cpp
+// Remove this variable, it's not needed
+```
+
+---
+
+#### Issue 3: No Check for getline Failure
+
+**Current code:**
+```cpp
+getline(&line, &buffersize, file);  // What if this fails?
+```
+
+**Improved code:**
+```cpp
+if(getline(&line, &buffersize, file) == -1){
+    cout << "Error reading line " << i << endl;
+    free(line);
+    fclose(file);
+    return -1;
+}
+```
+
+---
+
+### Comparison with read_sizes()
+
+Both functions read the same file, but for different purposes:
+
+| Aspect | read_sizes() | read_input() |
+|--------|-------------|--------------|
+| **Purpose** | Count lines, find max length | Load documents into memory |
+| **Returns** | Line count, max length | Success/failure code |
+| **Memory** | Frees each line after measuring | Stores lines in Mymap |
+| **When called** | Before creating Mymap | After creating Mymap |
+| **Output** | Metadata about file | Populated Mymap object |
+
+**Typical usage together:**
+```cpp
+// Step 1: Get file statistics
+int linecount = 0, maxlength = -1;
+read_sizes(&linecount, &maxlength, "doc1.txt");
+
+// Step 2: Create map with correct size
+Mymap* map = new Mymap(linecount, maxlength);
+
+// Step 3: Load documents
+read_input(map, "doc1.txt");
+
+// Step 4: Use documents
+for(int i=0; i<map->get_size(); i++){
+    map->print(i);
+}
+```
+
+---
+
+### Key Concepts Demonstrated
+
+1. **File I/O**: Opening, reading, closing files
+2. **Dynamic Memory**: getline allocates, we must free
+3. **Error Handling**: Check returns, clean up on error
+4. **Resource Management**: Close files, free memory
+5. **Integration**: Combining file I/O with custom data structures
+6. **Memory Discipline**: Reset pointers after freeing
+
+---
+
+### Common Mistakes to Avoid
+
+❌ **Forgetting to free line:**
+```cpp
+for(int i=0; i<size; i++){
+    getline(&line, &buffersize, file);
+    // Missing free(line) → MEMORY LEAK!
+}
+```
+
+❌ **Not resetting to NULL:**
+```cpp
+free(line);
+getline(&line, &buffersize, file);  // Uses freed pointer!
+```
+
+❌ **Not closing file on error:**
+```cpp
+if(error){
+    return -1;  // File still open! → RESOURCE LEAK!
+}
+```
+
+❌ **Not checking fopen return:**
+```cpp
+FILE* file = fopen("file.txt", "r");
+getline(&line, &buffersize, file);  // CRASH if file is NULL!
+```
+
+---
+
+### Best Practices Demonstrated
+
+✅ **Initialize pointers to NULL**
+✅ **Free memory after use**
+✅ **Reset pointers after freeing**
+✅ **Close files before returning**
+✅ **Clean up on error paths**
+✅ **Check function return values**
+
+---
+
+### Summary
+
+The `read_input()` function is a crucial bridge between file I/O and our search engine's data structures. It demonstrates:
+
+- **File reading** with `fopen()` and `getline()`
+- **Memory management** with `malloc()`/`free()`
+- **Error handling** with return codes and cleanup
+- **Integration** of system functions with custom classes
+
+Understanding this function is key to seeing how raw file data becomes structured, searchable information in memory.
+
+---
+
+4. **eof()**: Detects end-of-file condition (after read fails)
+5. **ungetc()**: Pushes character back to stream (peek functionality)
+6. **size_t**: Unsigned integer type for sizes and counts
+7. **getline()**: POSIX function for reading entire lines dynamically
+8. **Windows Bug**: getline() hangs on empty files - solution: check first with fgetc()
+9. **free()**: Deallocates dynamically allocated memory
+10. **read_input()**: Reads file line-by-line and inserts into Mymap container
+
+### Key Takeaways for Beginners
+
+- Always check return values (`NULL`, `-1`, `EOF`) before using results
+- Match every `fopen()` with `fclose()`
+- Match every `malloc()`/`getline()` with `free()`
+- Initialize pointers to `NULL` before use
+- Use `size_t` for sizes and counts (not `int`)
+- Check for empty files before `getline()` on Windows
+- Understand the difference between stack and heap memory
+- Clean up resources on error (close files, free memory)
+
+---
+
+**Document Version**: 1.1  
+**Last Updated**: December 24, 2025  
 **Author**: High-Performance Search Engine Project  
 **Repository**: github.com/adarshpheonix2810/high-performance-search-engine-cpp
