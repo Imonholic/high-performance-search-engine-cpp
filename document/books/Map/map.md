@@ -16,6 +16,8 @@ This document explains the **C++ concepts and features** used in the `Mymap` cla
 8. [Member Initializer List](#8-member-initializer-list)
 9. [const Keyword](#9-const-keyword)
 10. [Scope Resolution Operator (::)](#10-scope-resolution-operator)
+11. [const Correctness in Methods](#11-const-correctness-in-methods)
+12. [Why doc_lengths Stores Word Count](#12-why-doc_lengths-stores-word-count)
 
 ---
 
@@ -1076,6 +1078,250 @@ void Class2::method() {  // Class2's method
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 24, 2025  
+## 11. const Correctness in Methods
+
+### What is const Correctness?
+
+**const correctness** is a C++ programming practice where you mark methods and return types as `const` when they don't modify object state or data. This helps the compiler enforce immutability and prevents accidental modifications.
+
+### Syntax for const Methods
+
+```cpp
+class MyClass {
+    int value;
+public:
+    int getValue() const {  // const method - doesn't modify object
+        return value;
+    }
+    
+    void setValue(int v) {  // Non-const method - modifies object
+        value = v;
+    }
+};
+```
+
+### Why Use const Methods?
+
+1. **Compiler Enforcement** - Prevents accidental modification
+2. **Interface Contract** - Shows users this method is safe (read-only)
+3. **const Objects** - Allows method calls on const objects
+4. **Optimization** - Compiler can optimize better with const
+
+### Example from Map.hpp
+
+**Before (Incorrect):**
+```cpp
+char* getDocument(int i){
+    return documents[i];
+}
+```
+
+**Problems:**
+❌ Non-const method - can't call on const Mymap objects  
+❌ Returns non-const pointer - caller can modify the document  
+
+**After (Correct):**
+```cpp
+const char* getDocument(int i) const {
+    return documents[i];
+}
+```
+
+**Benefits:**
+✅ `const` method - can be called on const Mymap objects  
+✅ Returns `const char*` - caller cannot modify the document  
+✅ Enforces read-only access to document data  
+
+### Visual Explanation
+
+```cpp
+// Without const correctness:
+Mymap map(3, 100);
+char* doc = map.getDocument(0);
+doc[0] = 'X';  // ❌ Oops! Modified the document accidentally!
+
+// With const correctness:
+Mymap map(3, 100);
+const char* doc = map.getDocument(0);
+doc[0] = 'X';  // ✅ Compile ERROR! Cannot modify const data
+```
+
+### const Object Usage
+
+```cpp
+void processMap(const Mymap& map) {
+    // Only const methods can be called on const objects
+    
+    const char* doc = map.getDocument(0);  // ✅ OK - const method
+    int size = map.get_size();              // ✅ OK - const method
+    
+    // map.insert("text", 0);               // ❌ ERROR - non-const method
+}
+```
+
+### Return Type const
+
+| Return Type | Meaning | Can Modify? |
+|-------------|---------|-------------|
+| `char*` | Mutable pointer | Yes ❌ |
+| `const char*` | Pointer to const data | No ✅ |
+| `char* const` | Const pointer to mutable data | Data yes, pointer no |
+| `const char* const` | Const pointer to const data | Nothing ✅ |
+
+### Best Practices
+
+✅ Mark all getters as `const` methods  
+✅ Return `const` pointers/references for read-only data  
+✅ Use const references in function parameters: `void func(const Mymap& map)`  
+✅ Declare objects as const when they won't change: `const Mymap map(3, 100);`  
+
+---
+
+## 12. Why doc_lengths Stores Word Count
+
+### Background
+
+The `doc_lengths` array in the Mymap class stores important information about each document. Originally it stored character count, but was changed to store **word count** for a specific algorithmic reason.
+
+### What is BM25?
+
+**BM25** (Best Matching 25) is a ranking algorithm used in search engines to score documents based on relevance to a query. It's one of the most widely used algorithms in information retrieval.
+
+### The avgdl (Average Document Length) Requirement
+
+BM25 algorithm needs to calculate the **average document length** across all documents:
+
+```cpp
+avgdl = (total words in all documents) / (number of documents)
+```
+
+**Why word count, not character count?**
+- BM25 measures relevance by **term frequency** (how many times words appear)
+- Longer documents naturally have more words, which can bias scoring
+- BM25 normalizes scores using avgdl to be fair to shorter documents
+
+### Example Calculation
+
+```
+Document 1: "hello world" → 2 words
+Document 2: "hello world from earth" → 4 words  
+Document 3: "world" → 1 word
+
+avgdl = (2 + 4 + 1) / 3 = 2.33 words
+```
+
+### How It Works in Our Code
+
+**In split() function (document_store.cpp):**
+```cpp
+void split(char* temp, int id, TrieNode* trie, Mymap* mymap){
+    char* token;
+    token = strtok(temp, " \t");
+    int i = 0;                    // Word counter
+    while(token != NULL){
+        i++;                      // Count each word
+        trie->insert(token, id);
+        token = strtok(NULL, " \t");
+    }
+    mymap->setlength(id, i);      // Store word count
+}
+```
+
+**In Map class:**
+```cpp
+void setlength(int id, int length){
+    doc_lengths[id] = length;  // length = word count
+}
+
+int getlength(int id){
+    return doc_lengths[id];    // Returns word count
+}
+```
+
+### Why the Change?
+
+**Original Implementation (Wrong):**
+```cpp
+// In Map.cpp insert():
+doc_lengths[i] = len;  // ❌ Stored character count
+```
+
+**Problem:**
+- Character count includes spaces, punctuation
+- Doesn't reflect actual term frequency
+- Can't calculate proper avgdl for BM25
+
+**Fixed Implementation (Correct):**
+```cpp
+// In Map.cpp insert():
+// doc_lengths will be set by split() with word count
+
+// split() calls:
+mymap->setlength(id, wordCount);  // ✅ Stores word count
+```
+
+**Benefit:**
+✅ Each document's word count is stored  
+✅ Can calculate avgdl for BM25 algorithm  
+✅ Proper normalization in search ranking  
+
+### Future Usage
+
+When search functionality is implemented:
+
+```cpp
+void search(char* query, Trienode* trie, Mymap* map) {
+    // Calculate average document length
+    double avgdl = 0;
+    for(int i = 0; i < map->get_size(); i++){
+        avgdl += (double)map->getlength(i);  // Sum all word counts
+    }
+    avgdl /= (double)map->get_size();        // Divide by doc count
+    
+    // Use avgdl in BM25 scoring formula
+    // score = IDF * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * docLength / avgdl))
+}
+```
+
+### Key Takeaway
+
+**Character count** → Used for memory allocation  
+**Word count** → Used for search relevance scoring (BM25)  
+
+By storing word count in `doc_lengths`, we prepare the data structure for efficient BM25 implementation in future search functionality.
+
+---
+
+## Summary
+
+### Key C++ Concepts
+
+1. **Header Guards** - Prevent multiple inclusion (#ifndef, #define, #endif)
+2. **new/delete** - C++ dynamic memory (better than malloc/free)
+3. **nullptr** - Modern null pointer (C++11+)
+4. **char*** - Pointer to pointer (arrays of strings)
+5. **strcpy/strlen** - C string functions
+6. **Initializer List** - Efficient member initialization
+7. **const** - Immutability and const-correctness
+8. **::** - Scope resolution operator
+9. **const Methods** - Read-only member functions
+10. **BM25 avgdl** - Why we store word count not character count
+
+### Best Practices
+
+✅ Use header guards in all .hpp files  
+✅ Use `new`/`delete` in C++ (not malloc/free)  
+✅ Use `nullptr` instead of NULL  
+✅ Match allocation: `new` with `delete`, `new[]` with `delete[]`  
+✅ Use const for methods that don't modify state  
+✅ Use member initializer lists  
+✅ Always check pointer != nullptr before use  
+✅ Return const pointers for read-only data access  
+✅ Store word count for BM25 algorithm compatibility  
+
+---
+
+**Document Version**: 1.1  
+**Last Updated**: December 26, 2025  
+**Changes**: Added const correctness and BM25 word count explanation  
 **Repository**: github.com/adarshpheonix2810/high-performance-search-engine-cpp
