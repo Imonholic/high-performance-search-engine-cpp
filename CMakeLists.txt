@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 11)
 
 include_directories(header)
 
-add_executable(searchengine src/searchengine.cpp
-src/document_store.cpp
+add_executable(searchengine src/Searchengine.cpp
+src/Document_store.cpp
+src/Trie.cpp
 src/Map.cpp)
