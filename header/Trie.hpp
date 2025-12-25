@@ -13,6 +13,7 @@ class TrieNode
 public:
     TrieNode();
     ~TrieNode();
+    void insert(char* token, int id);
 };
 
 #endif
