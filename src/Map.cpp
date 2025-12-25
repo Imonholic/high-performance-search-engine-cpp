@@ -1,4 +1,4 @@
-#include "./Map.hpp"
+#include "Map.hpp"
 using namespace std;
 // Constructor
 Mymap::Mymap(int size, int buffersize) : size(size), buffersize(buffersize)
@@ -7,20 +7,7 @@ Mymap::Mymap(int size, int buffersize) : size(size), buffersize(buffersize)
     documents = new char *[size];
     doc_lengths = new int[size];
 
-    /* Initialize to nullptr/0
-    Mymap map(3, 100);  // 3 documents, max length 100
-    Without initialization:
-    documents[0] = 0x00FF8821 (random garbage)
-    documents[1] = 0xDEADBEEF (random garbage)
-    documents[2] = 0x12345678 (random garbage)
-    Destructor tries to delete these = CRASH! 💥
-
-    With initialization:
-    documents[0] = nullptr ✅
-    documents[1] = nullptr ✅
-    documents[2] = nullptr ✅
-    Destructor checks nullptr first = Safe! ✅
-    */
+    // Initialize to prevent undefined behavior
     for (int i = 0; i < size; i++)
     {
         documents[i] = nullptr;
@@ -67,7 +54,7 @@ int Mymap::insert(char* line, int i){
     // Allocate memory for this document
     documents[i] = new char[len + 1];
     strcpy(documents[i], start);
-    doc_lengths[i] = len;
+    // doc_lengths will be set by split() with word count for BM25
     
     return 1;
 } 
