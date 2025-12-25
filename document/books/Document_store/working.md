@@ -1322,6 +1322,375 @@ free(line);  // Free once at end
 
 ---
 
+## December 26, 2025 Update - Critical Bug Fixes
+
+### Changes Made Today
+
+Today we fixed three critical bugs in `document_store.cpp` that could cause crashes, memory corruption, and silent failures.
+
+---
+
+### Fix 1: Removed Dangerous free(token) from split()
+
+**File Changed**: `src/document_store.cpp` line 46  
+**What Changed**: Removed `free(token);` line that caused memory corruption
+
+**Before (BUGGY CODE):**
+```cpp
+void split(char* temp, int id, TrieNode* trie, Mymap* mymap){
+    char* token;
+    token = strtok(temp, " \t");
+    while(token != NULL){
+        trie->insert(token, id);
+        token = strtok(NULL, " \t");
+    }
+    mymap->setlength(id, i);
+    free(token);  // ❌ CRITICAL BUG - Memory corruption!
+}
+```
+
+**After (FIXED CODE):**
+```cpp
+void split(char* temp, int id, TrieNode* trie, Mymap* mymap){
+    char* token;
+    token = strtok(temp, " \t");
+    int i = 0;
+    while(token != NULL){
+        i++;
+        trie->insert(token, id);
+        token = strtok(NULL, " \t");
+    }
+    mymap->setlength(id, i);
+    // No free(token) - token doesn't own memory! ✅
+}
+```
+
+**Why was this a bug?**
+
+**Understanding strtok():**
+- `strtok()` does NOT allocate new memory
+- It modifies the original string by replacing delimiters with '\0'
+- It returns a pointer to a position INSIDE the original string
+
+**Visual Explanation:**
+```
+temp (allocated memory): "hello world earth"
+                         ^       ^
+                         |       |
+After strtok():          "hello\0world\0earth\0"
+                         ^
+                         token points here (inside temp, not new memory!)
+```
+
+**What happens with free(token)?**
+1. `token` points to somewhere inside `temp`
+2. `temp` was allocated by `malloc()` in caller function
+3. `free(token)` tries to free memory in the middle of `temp` allocation
+4. **Result:** Memory corruption! Undefined behavior! Potential crash!
+
+**Correct Behavior:**
+- `temp` is freed by caller (`read_input()` function)
+- `token` is just a pointer into `temp`, doesn't need freeing
+- Only free memory that YOU allocated with malloc/new
+
+**Memory Ownership:**
+```
+read_input() function:
+  → malloc(temp)           // ✅ Allocates memory
+  → split(temp, ...)       
+      → strtok(temp, " ")  // ❌ Does NOT allocate, just returns pointer
+  → free(temp)             // ✅ Frees the allocation
+```
+
+**Impact of this bug:**
+- **Before:** Crashes, corruption, undefined behavior
+- **After:** Stable execution, proper memory management
+
+---
+
+### Fix 2: Added NULL Check After fopen()
+
+**File Changed**: `src/document_store.cpp` line 49  
+**What Changed**: Added validation to check if file opened successfully
+
+**Before (NO ERROR HANDLING):**
+```cpp
+int read_input(Mymap* mymap, TrieNode *trie, char* file_name){
+    FILE *file = fopen(file_name, "r");
+    char *line = NULL;
+    size_t buffersize = 0;
+    char *temp = (char*)malloc(...);
+    for(int i = 0; i < mymap->get_size(); i++){
+        getline(&line, &buffersize, file);  // ❌ Crashes if file == NULL!
+```
+
+**After (WITH ERROR HANDLING):**
+```cpp
+int read_input(Mymap* mymap, TrieNode *trie, char* file_name){
+    FILE *file = fopen(file_name, "r");
+    if(file == NULL){  // ✅ Check for errors!
+        cout << "Error opening file: " << file_name << endl;
+        return -1;
+    }
+    char *line = NULL;
+    size_t buffersize = 0;
+    char *temp = (char*)malloc(...);
+```
+
+**Why was this needed?**
+
+**Situations where fopen() returns NULL:**
+1. File doesn't exist
+2. No permission to read the file
+3. Path is invalid
+4. Too many files open
+5. Disk I/O error
+
+**What happens without the check?**
+```cpp
+FILE *file = fopen("nonexistent.txt", "r");  // Returns NULL
+// file == NULL, but we don't check
+
+getline(&line, &buffersize, file);  // ❌ Passes NULL to getline()
+// Undefined behavior! Likely segmentation fault (crash)
+```
+
+**Example Scenario:**
+```bash
+# User types wrong filename
+./searchengine -d wrongfile.txt -k 5
+
+# Without check:
+Please wait...
+Segmentation fault (core dumped)  ❌ Unhelpful crash
+
+# With check:
+Please wait...
+Error opening file: wrongfile.txt  ✅ Clear error message
+```
+
+**Best Practice Pattern:**
+```cpp
+FILE *file = fopen(filename, mode);
+if(file == NULL){
+    // Print error
+    // Clean up any resources
+    // Return error code
+    return -1;
+}
+// Safe to use file here
+```
+
+**Impact:**
+- **Before:** Silent crashes, confusing errors
+- **After:** Clear error messages, graceful failure
+
+---
+
+### Fix 3: Added getline() Return Value Check
+
+**File Changed**: `src/document_store.cpp` line 57  
+**What Changed**: Validate getline() succeeded before using the data
+
+**Before (NO VALIDATION):**
+```cpp
+for(int i = 0; i < mymap->get_size(); i++){
+    getline(&line, &buffersize, file);  // ❌ No check!
+    if (mymap->insert(line, i) == -1) {
+        // Only checks insert, not getline
+    }
+```
+
+**After (WITH VALIDATION):**
+```cpp
+for(int i = 0; i < mymap->get_size(); i++){
+    if(getline(&line, &buffersize, file) == -1){  // ✅ Check return!
+        cout << "Error reading line " << i << endl;
+        free(line);
+        fclose(file);
+        free(temp);
+        return -1;
+    }
+    if (mymap->insert(line, i) == -1) {
+```
+
+**Why was this needed?**
+
+**getline() Return Values:**
+- **Positive number:** Successfully read that many characters
+- **-1:** End of file OR read error occurred
+
+**Problem Scenario:**
+```cpp
+// Create map expecting 10 documents
+Mymap* map = new Mymap(10, 1000);
+
+// But file only has 5 lines!
+read_input(map, trie, "short_file.txt");
+```
+
+**Execution without check:**
+```
+i=0: getline() → 45 chars ✅ Success
+i=1: getline() → 52 chars ✅ Success
+i=2: getline() → 38 chars ✅ Success
+i=3: getline() → 61 chars ✅ Success
+i=4: getline() → 47 chars ✅ Success
+i=5: getline() → -1 (EOF) ❌ But we don't check!
+     → line might be NULL or garbage
+     → mymap->insert(garbage, 5) → undefined behavior
+i=6: getline() → -1 (EOF) ❌ Still processing!
+     → More garbage inserted
+i=7: getline() → -1 (EOF) ❌ Continuing...
+     → Data structure corrupted
+```
+
+**Execution with check:**
+```
+i=0: getline() → 45 chars ✅ Success
+i=1: getline() → 52 chars ✅ Success
+i=2: getline() → 38 chars ✅ Success
+i=3: getline() → 61 chars ✅ Success
+i=4: getline() → 47 chars ✅ Success
+i=5: getline() → -1 (EOF)
+     → Check: if (getline() == -1) ✅ TRUE
+     → Print: "Error reading line 5"
+     → free(line)
+     → fclose(file)
+     → free(temp)
+     → return -1
+     → Caller knows there was an error!
+```
+
+**The Error Recovery Pattern:**
+```cpp
+if(error_detected){
+    // 1. Print informative message
+    cout << "Error: what went wrong" << endl;
+    
+    // 2. Free allocated memory
+    free(line);
+    free(temp);
+    
+    // 3. Close open files
+    fclose(file);
+    
+    // 4. Return error code
+    return -1;
+}
+```
+
+**Why cleanup is critical:**
+```cpp
+// Without cleanup:
+if(getline() == -1){
+    return -1;  // ❌ Memory leak! File still open!
+}
+
+// With proper cleanup:
+if(getline() == -1){
+    free(line);   // ✅ Free memory
+    free(temp);   // ✅ Free memory
+    fclose(file); // ✅ Close file
+    return -1;    // ✅ Then return
+}
+```
+
+**Impact:**
+- **Before:** Silent corruption, garbage data processed
+- **After:** Early detection, clean failure, no corruption
+
+---
+
+### Fix 4: Removed Unused Variable
+
+**File Changed**: `src/document_store.cpp` line 52  
+**What Changed**: Removed `int current_length;` declaration that was never used
+
+**Before:**
+```cpp
+int read_input(Mymap* mymap, TrieNode *trie, char* file_name){
+    FILE *file = fopen(file_name, "r");
+    if(file == NULL){
+        cout << "Error opening file: " << file_name << endl;
+        return -1;
+    }
+    char *line = NULL;
+    size_t buffersize = 0;
+    int current_length;  // ❌ Declared but never used
+    char *temp = (char*)malloc(mymap->get_buffersize() * sizeof(char));
+```
+
+**After:**
+```cpp
+int read_input(Mymap* mymap, TrieNode *trie, char* file_name){
+    FILE *file = fopen(file_name, "r");
+    if(file == NULL){
+        cout << "Error opening file: " << file_name << endl;
+        return -1;
+    }
+    char *line = NULL;
+    size_t buffersize = 0;
+    char *temp = (char*)malloc(mymap->get_buffersize() * sizeof(char));
+```
+
+**Why remove it?**
+- Variable was declared but never assigned or used
+- Wastes stack memory (4 bytes)
+- Creates compiler warnings with strict flags
+- Makes code confusing (readers wonder what it's for)
+- **Code cleanup:** Keep only what's needed
+
+**Best Practice:**
+✅ Only declare variables when you need them  
+✅ Remove unused code during refactoring  
+✅ Enable compiler warnings to catch this  
+
+---
+
+### Summary of December 26 Fixes
+
+| Fix # | File | Line | Issue | Impact |
+|-------|------|------|-------|--------|
+| 1 | document_store.cpp | 46 | `free(token)` memory corruption | Critical - causes crashes |
+| 2 | document_store.cpp | 49 | No fopen NULL check | High - crashes on bad filename |
+| 3 | document_store.cpp | 57 | No getline validation | High - processes garbage data |
+| 4 | document_store.cpp | 52 | Unused variable | Low - cleanup |
+
+### Code Quality Improvements
+
+✅ **Memory Safety** - No more invalid free() calls  
+✅ **Error Handling** - All I/O operations validated  
+✅ **Resource Management** - Proper cleanup on errors  
+✅ **User Experience** - Clear error messages  
+✅ **Code Cleanliness** - Removed unused variables  
+
+### Testing the Fixes
+
+**Test Case 1: Non-existent file**
+```bash
+./searchengine -d fake.txt -k 5
+# Before: Segmentation fault
+# After:  Error opening file: fake.txt
+```
+
+**Test Case 2: File with fewer lines than expected**
+```bash
+# Map expects 10 lines, file has 5
+./searchengine -d short.txt -k 5
+# Before: Corrupt data, undefined behavior
+# After:  Error reading line 5
+```
+
+**Test Case 3: Normal operation**
+```bash
+./searchengine -d doc1.txt -k 5
+# Before: Works (but with memory bugs lurking)
+# After:  Works safely with no hidden bugs
+```
+
+---
+
 ## Summary
 
 ### Key Takeaways
@@ -1334,28 +1703,39 @@ free(line);  // Free once at end
    - `getline()` - Read lines dynamically
    - `free()` - Memory management
    - `fclose()` - Release resources
+   - `strtok()` - Tokenize strings (doesn't allocate!)
 
 3. **Memory Management**:
    - Allocates memory for each line
    - Frees memory after processing
    - Defensive programming with final `free()`
+   - **NEVER free strtok() return values**
 
 4. **Error Handling**:
-   - File not found → return -1
+   - File not found → return -1 with message
    - File empty → return -1 (with cleanup)
+   - Read error → return -1 with cleanup
    - Success → return 1
 
 5. **Pointer Usage**:
    - Output parameters modified via pointers
    - Allows "returning" multiple values
+   - Understanding ownership prevents bugs
 
 6. **Platform Considerations**:
    - Empty file check prevents Windows `getline()` hang
    - POSIX `getline()` used (available on MinGW)
 
+7. **Bug Fixes (Dec 26, 2025)**:
+   - Fixed memory corruption from free(token)
+   - Added fopen() NULL checking
+   - Added getline() return validation
+   - Removed unused variables
+
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 23, 2025  
+**Document Version**: 1.1  
+**Last Updated**: December 26, 2025  
+**Changes**: Added December 26 bug fixes documentation  
 **Author**: High-Performance Search Engine Project  
 **Repository**: github.com/adarshpheonix2810/high-performance-search-engine-cpp
