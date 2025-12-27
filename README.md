@@ -266,7 +266,7 @@ Distributed under the MIT License. See `LICENSE` file for more information.
 
 **Adarsh Kumar**
 - GitHub: [@adarshpheonix2810](https://github.com/adarshpheonix2810)
-- LinkedIn: [Connect with me](https://www.linkedin.com/in/adarsh-kumar-pheonix/)
+- LinkedIn: [Connect with me](https://www.linkedin.com/in/adarsh-singh-412298273/)
 
 ---
 
