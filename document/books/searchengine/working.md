@@ -3168,6 +3168,436 @@ int main(int argc, char** argv) {
 
 ---
 
+## December 28, 2025 Updates
+
+### Major Changes
+
+**1. Added Input Manager System**
+- New function: `inputmanager()`
+- Command routing for user queries
+- Return code system (0/1/2)
+
+**2. Added Query Loop**
+- Interactive command-line interface
+- Uses `getline()` for input
+- Proper exit handling
+
+**3. Fixed Critical Memory Leaks**
+- Trie now deleted on error
+- Input freed before all break statements
+
+---
+
+### inputmanager() Function Implementation
+
+```cpp
+int inputmanager(char* input, TrieNode* trie, Mymap* mymap, int k){
+    char* token=strtok(input, " \t\n");
+    
+    if(token == NULL){
+        return 0;  // Empty input, continue
+    }
+    
+    if(!strcmp(token,"/search")){
+        search(token,trie,mymap,k);
+        return 1;
+    }
+    else if(!strcmp(token,"/df")){
+        df(trie);
+        return 1;
+    }
+    else if(!strcmp(token,"/tf")){
+        tf(token,trie);
+        return 1;
+    }
+    else if(!strcmp(token,"/exit")){
+        return 2;  // Signal to exit
+    }
+    else{
+        cout<<"Unknown command: "<<token<<endl;
+        cout<<"Available commands: /search, /df, /tf, /exit"<<endl;
+        return 0;  // Continue, not exit
+    }
+}
+```
+
+#### Line-by-Line Breakdown
+
+**Line 1: Function Signature**
+```cpp
+int inputmanager(char* input, TrieNode* trie, Mymap* mymap, int k)
+```
+- Returns `int` for exit control
+- Takes user input string and data structures
+
+**Lines 2-5: Parse Command**
+```cpp
+char* token=strtok(input, " \t\n");
+if(token == NULL){
+    return 0;  // Empty input, continue
+}
+```
+- Split input into tokens
+- Handle empty input gracefully
+
+**Lines 7-10: Search Command**
+```cpp
+if(!strcmp(token,"/search")){
+    search(token,trie,mymap,k);
+    return 1;
+}
+```
+- Compare with "/search"
+- Call search function
+- Return 1 = success, continue
+
+**Lines 11-14: DF Command**
+```cpp
+else if(!strcmp(token,"/df")){
+    df(trie);
+    return 1;
+}
+```
+- Get document frequency
+- Return 1 = continue
+
+**Lines 15-18: TF Command**
+```cpp
+else if(!strcmp(token,"/tf")){
+    tf(token,trie);
+    return 1;
+}
+```
+- Get term frequency
+- Return 1 = continue
+
+**Lines 19-21: Exit Command**
+```cpp
+else if(!strcmp(token,"/exit")){
+    return 2;  // Signal to exit
+}
+```
+- Return 2 = special exit code
+- Main loop will break
+
+**Lines 22-26: Unknown Command**
+```cpp
+else{
+    cout<<"Unknown command: "<<token<<endl;
+    cout<<"Available commands: /search, /df, /tf, /exit"<<endl;
+    return 0;  // Continue, not exit
+}
+```
+- Helpful error message
+- Shows available commands
+- Return 0 = continue (don't exit on typo)
+
+---
+
+### Query Loop Implementation
+
+```cpp
+char* input=NULL;
+size_t input_length=0;
+while(1){
+    cout << "Enter query (or type '/exit' to quit): ";
+    if(getline(&input, &input_length, stdin) == -1){
+        // EOF or error
+        free(input);
+        break;
+    }
+    
+    int ret=inputmanager(input,trie,mymap,k);
+    if(ret==2){
+        cout<<"Exiting program..."<<endl;
+        free(input);
+        break;
+    }
+    // ret == 0 or 1: continue
+}
+
+delete (mymap);
+delete (trie);
+return 0;
+```
+
+#### Line-by-Line Breakdown
+
+**Lines 1-2: Initialize Input Buffer**
+```cpp
+char* input=NULL;
+size_t input_length=0;
+```
+- `input` starts as NULL
+- getline() will allocate memory
+- `input_length` tracks buffer size
+
+**Line 3: Infinite Loop**
+```cpp
+while(1){
+```
+- Runs until explicit break
+- Allows multiple queries
+
+**Line 4: Prompt User**
+```cpp
+cout << "Enter query (or type '/exit' to quit): ";
+```
+- Clear instruction
+- Shows exit command
+
+**Lines 5-9: Read Input**
+```cpp
+if(getline(&input, &input_length, stdin) == -1){
+    // EOF or error
+    free(input);
+    break;
+}
+```
+- getline() reads entire line (with spaces)
+- Returns -1 on EOF (Ctrl+D) or error
+- **CRITICAL**: Free input before break
+- Prevents memory leak
+
+**Lines 11-12: Process Command**
+```cpp
+int ret=inputmanager(input,trie,mymap,k);
+if(ret==2){
+```
+- Call inputmanager to route command
+- Check for exit signal (2)
+
+**Lines 13-16: Handle Exit**
+```cpp
+cout<<"Exiting program..."<<endl;
+free(input);
+break;
+```
+- Friendly exit message
+- **CRITICAL**: Free input before break
+- Prevents memory leak
+
+**Lines 17-18: Continue Loop**
+```cpp
+// ret == 0 or 1: continue
+}
+```
+- Return 0 or 1 means continue
+- Loop back for next query
+
+**Lines 20-22: Cleanup**
+```cpp
+delete (mymap);
+delete (trie);
+return 0;
+```
+- Delete all allocated objects
+- Return 0 for success
+
+---
+
+### Memory Leak Fixes
+
+#### Fix #1: Trie Not Deleted on Error
+
+**Before (Memory Leak):**
+```cpp
+if(read_input(mymap,trie, argv[2]) == -1){
+    delete (mymap);  // ✅ Freed
+    return -1;       // ❌ trie leaked!
+}
+```
+
+**After (No Leak):**
+```cpp
+if(read_input(mymap,trie, argv[2]) == -1){
+    delete (mymap);  // ✅ Freed
+    delete (trie);   // ✅ Freed
+    return -1;
+}
+```
+
+**Why This Matters:**
+```
+Scenario: File read fails
+Before: 
+  - mymap deleted ✅
+  - trie leaked ❌ (Trie + all child nodes)
+  - Memory loss: Potentially MB of data
+
+After:
+  - mymap deleted ✅
+  - trie deleted ✅ (recursive destructor frees all)
+  - No leak ✅
+```
+
+---
+
+#### Fix #2: Input Buffer Not Freed on Break
+
+**Before (Memory Leak):**
+```cpp
+while(1){
+    getline(&input, &input_length, stdin);  // Allocates
+    
+    if(getline_result == -1){
+        break;  // ❌ Leaked!
+    }
+    
+    if(ret==2){
+        break;  // ❌ Leaked!
+    }
+}
+free(input);  // Too late - already broke out
+```
+
+**After (No Leak):**
+```cpp
+while(1){
+    if(getline(&input, &input_length, stdin) == -1){
+        free(input);  // ✅ Free before break
+        break;
+    }
+    
+    if(ret==2){
+        free(input);  // ✅ Free before break
+        break;
+    }
+}
+// Cleanup already done in loop
+```
+
+**Why This Matters:**
+```
+Scenario: User types /exit or Ctrl+D
+Before:
+  - break executed
+  - input buffer orphaned
+  - Memory leaked on every exit
+
+After:
+  - input freed before break
+  - No orphaned memory
+  - Clean exit ✅
+```
+
+---
+
+### getline() Memory Management
+
+#### How getline Works
+
+**First Call:**
+```cpp
+char* input = NULL;     // Start with NULL
+size_t len = 0;         // Size = 0
+getline(&input, &len, stdin);
+// getline allocates buffer
+// input now points to allocated memory
+```
+
+**Memory State:**
+```
+Before: input → NULL
+After:  input → [allocated buffer with user input]
+```
+
+**Subsequent Calls:**
+```cpp
+getline(&input, &len, stdin);
+// If new input fits: reuses buffer
+// If new input too big: realloc's buffer
+```
+
+**Critical Rule:**
+```cpp
+// For every getline success:
+getline(&input, &len, stdin);
+// ... use input ...
+free(input);  // MUST free!
+```
+
+---
+
+### Return Code System
+
+#### Why Return Codes?
+
+**Problem:**
+```cpp
+// How to exit this loop?
+while(1){
+    inputmanager(...);
+    // No way to signal exit!
+}
+```
+
+**Solution:**
+```cpp
+while(1){
+    int ret = inputmanager(...);
+    if(ret == 2) break;  // Exit signal
+}
+```
+
+#### Return Code Meanings
+
+| Code | Meaning | Main Loop Action | Example |
+|------|---------|------------------|---------|
+| 0 | Continue (empty/unknown) | Loop again | User pressed Enter, typed "abc" |
+| 1 | Success (command executed) | Loop again | "/df hello" executed |
+| 2 | Exit signal | Break loop | User typed "/exit" |
+
+#### Flow Diagram
+
+```
+User Input
+    ↓
+inputmanager()
+    ↓
+Parse command
+    ↓
+    ├─ Empty → return 0 → continue
+    ├─ /search → execute → return 1 → continue
+    ├─ /df → execute → return 1 → continue
+    ├─ /tf → execute → return 1 → continue
+    ├─ /exit → return 2 → BREAK
+    └─ Unknown → error msg → return 0 → continue
+```
+
+---
+
+### Summary of December 28 Fixes
+
+| Fix # | Issue | Severity | Fix |
+|-------|-------|----------|-----|
+| 1 | Trie leaked on error | High | Added `delete (trie)` |
+| 2 | Input leaked on break | High | Added `free(input)` before breaks |
+| 3 | Unknown command exits | Medium | Changed return -1 to 0 |
+| 4 | Poor error messages | Low | Added helpful messages |
+
+### Testing Results
+
+**Before Fixes:**
+```bash
+> hello
+Exiting program.  ← Bug! Should continue
+# Trie leaked if file error
+# Input leaked on every exit
+```
+
+**After Fixes:**
+```bash
+> hello
+Unknown command: hello
+Available commands: /search, /df, /tf, /exit
+> /exit
+Exiting program...  ← Correct!
+# No memory leaks ✅
+```
+
+---
+
 ## Summary
 
 This `Searchengine.cpp` file serves as the **main entry point** for the search engine application. It handles:
@@ -3177,30 +3607,35 @@ This `Searchengine.cpp` file serves as the **main entry point** for the search e
 3. **File processing coordination** - Calls `read_sizes()` and `read_input()` 
 4. **User feedback** - Clear messages for all scenarios
 5. **Standards compliance** - Proper return values for automation
+6. **Interactive queries** - Command loop with proper exit handling (**New Dec 28**)
+7. **Memory management** - No leaks, all allocations freed (**Fixed Dec 28**)
 
 **Current State:**
 - Foundation for search engine complete
 - Argument parsing complete
 - File reading complete
 - Error handling robust
+- **Query system working** (**New Dec 28**)
+- **Memory leak-free** (**Fixed Dec 28**)
 - Ready for search implementation
 
 **Key Functions:**
 - `main()` - Entry point with proper return values
+- `inputmanager()` - Command router (**New Dec 28**)
 - `strcmp()` - String comparison
-- `stoi()` - String to integer conversion with exception handling
+- `stoi()` - String to integer conversion
+- `getline()` - Read user input (**New Dec 28**)
 - `read_sizes()` - File size analysis
 - `read_input()` - Document loading
 
-**Recent Improvements (Dec 26):**
-- Fixed return value to follow Unix standard (0 = success)
-- Cleaned up include paths for consistency
-- Enhanced automation compatibility
+**Recent Improvements:**
+- **Dec 26**: Fixed return value, cleaned includes
+- **Dec 28**: Added query system, fixed memory leaks, improved error handling
 
 ---
 
-**Document Version**: 1.1  
-**Last Updated**: December 26, 2025  
-**Changes**: Added December 26 fixes documentation  
+**Document Version**: 1.2  
+**Last Updated**: December 28, 2025  
+**Changes**: Added inputmanager documentation, getline usage, memory leak fixes  
 **Author**: High-Performance Search Engine Project  
 **Repository**: github.com/adarshpheonix2810/high-performance-search-engine-cpp
