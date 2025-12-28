@@ -960,6 +960,280 @@ include_directories(header)  # Tell compiler where headers are
 
 ---
 
+## 6. Input Manager and Query System
+
+### 6.1 What is Input Manager?
+
+The `inputmanager()` function is the **command router** that processes user queries and executes appropriate search operations.
+
+### 6.2 Command Structure
+
+**Available Commands:**
+- `/search <query>` - Search for documents
+- `/tf <doc_id> <word>` - Get term frequency
+- `/df <word>` - Get document frequency
+- `/exit` - Exit program
+
+### 6.3 Return Codes
+
+The `inputmanager()` function uses return codes to control program flow:
+
+| Return Value | Meaning | Action |
+|--------------|---------|--------|
+| `0` | Empty or unknown command | Continue loop |
+| `1` | Command executed successfully | Continue loop |
+| `2` | Exit signal | Break loop, terminate |
+
+### 6.4 Why Return Codes?
+
+**Problem Without Return Codes:**
+```cpp
+// Bad approach
+while(1){
+    inputmanager(...);  // How to exit?
+}
+```
+
+**Solution With Return Codes:**
+```cpp
+// Good approach
+while(1){
+    int ret = inputmanager(...);
+    if(ret == 2){
+        break;  // Exit cleanly
+    }
+}
+```
+
+**Benefits:**
+- ✅ Clean exit mechanism
+- ✅ Different handling for different commands
+- ✅ Error recovery (return 0 for unknown commands)
+
+### 6.5 What is getline?
+
+`getline()` reads an entire line of input from stdin, including spaces.
+
+**Syntax:**
+```cpp
+ssize_t getline(char **lineptr, size_t *n, FILE *stream);
+```
+
+**Parameters:**
+- `lineptr` - Pointer to buffer (allocated by getline)
+- `n` - Size of buffer
+- `stream` - Input stream (usually stdin)
+
+**Return Value:**
+- Number of characters read (success)
+- `-1` on failure or EOF
+
+### 6.6 Why getline vs scanf?
+
+| Feature | scanf | getline |
+|---------|-------|---------|
+| Reads spaces | ❌ No | ✅ Yes |
+| Buffer overflow risk | ✅ Yes | ❌ No (auto-resizes) |
+| Memory management | ❌ Manual | ✅ Automatic |
+| Multi-word input | ❌ Breaks | ✅ Works |
+
+**Example:**
+```cpp
+// scanf problem
+char input[100];
+scanf("%s", input);  // Input: "hello world"
+// Result: input = "hello" (only first word!)
+
+// getline solution
+char* input = NULL;
+size_t len = 0;
+getline(&input, &len, stdin);  // Input: "hello world"
+// Result: input = "hello world\n" (complete line!)
+```
+
+### 6.7 getline Memory Management
+
+**Key Rule:** `getline()` allocates memory, you must `free()` it!
+
+```cpp
+char* input = NULL;
+size_t len = 0;
+getline(&input, &len, stdin);  // Memory allocated
+
+// ... use input ...
+
+free(input);  // ✅ Must free!
+```
+
+**Auto-resizing:**
+```cpp
+char* input = NULL;
+size_t len = 0;
+
+getline(&input, &len, stdin);  // Input: "hi" → allocates small buffer
+free(input);
+
+input = NULL;
+len = 0;
+getline(&input, &len, stdin);  // Input: "very long text..." → allocates larger buffer
+free(input);
+```
+
+### 6.8 What is strtok (in inputmanager context)?
+
+`strtok()` splits the input line into command and arguments.
+
+**Example Flow:**
+```
+User input: "/tf 0 hello\n"
+    ↓
+getline() captures entire line
+    ↓
+strtok(input, " \t\n") → "/tf"
+    ↓
+Compare with commands
+    ↓
+Call appropriate function
+```
+
+**Memory Safety Rule:**
+```cpp
+char* token = strtok(input, " \t\n");
+// token points INSIDE input buffer
+// Don't free(token)! ❌
+```
+
+### 6.9 Unknown Command Handling
+
+**Old Behavior (Bug):**
+```cpp
+else{
+    return -1;  // Exit on unknown command ❌
+}
+
+// In main:
+if(ret == -1){
+    cout<<"Exiting program."<<endl;  // Confusing!
+}
+```
+
+**New Behavior (Fixed):**
+```cpp
+else{
+    cout<<"Unknown command: "<<token<<endl;
+    cout<<"Available commands: /search, /df, /tf, /exit"<<endl;
+    return 0;  // Continue, don't exit ✅
+}
+```
+
+**Benefits:**
+- ✅ Typos don't close program
+- ✅ Helpful error message
+- ✅ User learns correct commands
+
+---
+
+## 7. Memory Leak Fixes
+
+### 7.1 What is a Memory Leak?
+
+A **memory leak** occurs when allocated memory is not freed, causing the program to consume more memory over time.
+
+### 7.2 Leak #1: Trie Not Deleted on Error
+
+**Problem:**
+```cpp
+if(read_input(mymap, trie, argv[2]) == -1){
+    delete (mymap);  // ✅ mymap deleted
+    return -1;       // ❌ trie NOT deleted - LEAK!
+}
+```
+
+**Memory State:**
+```
+Heap:
+  [mymap] → deleted ✅
+  [trie]  → still allocated ❌ LEAK!
+```
+
+**Fix:**
+```cpp
+if(read_input(mymap, trie, argv[2]) == -1){
+    delete (mymap);  // ✅ mymap deleted
+    delete (trie);   // ✅ trie deleted - NO LEAK!
+    return -1;
+}
+```
+
+### 7.3 Leak #2: Input Not Freed on Break
+
+**Problem:**
+```cpp
+while(1){
+    getline(&input, &len, stdin);  // Allocates memory
+    
+    if(getline_result == -1){
+        break;  // ❌ input not freed - LEAK!
+    }
+    
+    if(ret == 2){
+        break;  // ❌ input not freed - LEAK!
+    }
+}
+free(input);  // Too late! Already broke out
+```
+
+**Fix:**
+```cpp
+while(1){
+    getline(&input, &len, stdin);
+    
+    if(getline_result == -1){
+        free(input);  // ✅ Free before break
+        break;
+    }
+    
+    if(ret == 2){
+        free(input);  // ✅ Free before break
+        break;
+    }
+}
+```
+
+### 7.4 Why These Leaks Matter
+
+**Memory Growth:**
+```
+Program start:      10 MB
+After 1 iteration:  10 MB + leaked input
+After 10 iterations: 10 MB + 10 leaked inputs
+After 1000 iterations: 10 MB + 1000 leaked inputs → CRASH!
+```
+
+**Impact:**
+- Long-running program consumes more RAM
+- System performance degrades
+- Eventually runs out of memory
+- Program crashes or system hangs
+
+### 7.5 Memory Leak Detection
+
+**Manual Check:**
+```cpp
+// For every malloc/new:
+new Mymap(...)  // ← Must have matching delete
+
+// For every getline:
+getline(&input, ...)  // ← Must have matching free
+```
+
+**Tools:**
+- Valgrind (Linux)
+- AddressSanitizer (GCC/Clang)
+- Visual Studio Memory Profiler (Windows)
+
+---
+
 ## References
 
 For more information, visit:  
@@ -968,11 +1242,13 @@ For more information, visit:
 - [String Comparison in C/C++](https://en.cppreference.com/w/cpp/string/byte/strcmp/)
 - [Exit Status (Unix)](https://en.wikipedia.org/wiki/Exit_status)
 - [Header Guards](https://en.cppreference.com/w/cpp/preprocessor/include)
+- [getline() Manual](https://man7.org/linux/man-pages/man3/getline.3.html)
+- [Memory Leaks Explained](https://en.wikipedia.org/wiki/Memory_leak)
 
 ---
 
-**Document Version**: 1.1  
-**Last Updated**: December 26, 2025  
-**Changes**: Added main() return values, header guard consistency, and include path documentation  
+**Document Version**: 1.2  
+**Last Updated**: December 28, 2025  
+**Changes**: Added input manager system, getline documentation, memory leak fixes  
 
 *Documentation created for educational purposes to help understand the Search Engine project implementation.*
