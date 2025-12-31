@@ -12,5 +12,6 @@ class listnode
         listnode(int did):id(did),times(0){next=NULL;}
         ~listnode();
         void add(int did);
+        int search(int did);
 };
 #endif
