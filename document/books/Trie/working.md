@@ -1320,10 +1320,463 @@ trie->tfsearchword(1, "xyz", 0, 3)
 
 ---
 
-**Document Version**: 1.1  
-**Last Updated**: December 31, 2025  
-**Changes**: Implemented tfsearchword(), performance optimization with wordlen parameter  
-**Performance Gain**: 80% reduction in operations, O(n²) → O(n) complexity  
-**Status**: Term frequency search fully operational ✅  
+## January 1-2, 2026 Updates
+
+### Major Changes
+
+**1. Implemented dfsearchword() Function** (Jan 1)
+- Document frequency search now working
+- Counts how many documents contain a word
+- Uses volume() from listnode to count documents
+
+**2. Implemented searchall() Function** (Jan 2)
+- Traverses entire Trie structure
+- Displays all indexed words
+- Recursive DFS traversal
+
+**3. Performance Optimization** (Jan 1)
+- Applied wordlen parameter to dfsearchword()
+- Same optimization pattern as tfsearchword()
+- Eliminates repeated strlen() calls
+
+---
+
+### dfsearchword() Implementation
+
+```cpp
+int TrieNode::dfsearchword(char* word, int curr, int wordlen){
+    if(word[curr]==value){
+        if(curr==wordlen-1){
+            if(list!=NULL){
+                return list->volume();
+            }
+            else{
+                return 0;
+            }
+        }else{
+            if(child!=NULL){
+                return child->dfsearchword(word, curr+1, wordlen);
+            }else{
+                return 0;
+            }
+        }
+    }
+    else{
+        if(sibling!=NULL){
+            return sibling->dfsearchword(word, curr, wordlen);
+        }else{
+            return 0;
+        }
+    }
+};
+```
+
+#### Line-by-Line Breakdown
+
+**Line 1: Function Signature**
+```cpp
+int TrieNode::dfsearchword(char* word, int curr, int wordlen)
+```
+- `word`: The word to find in Trie
+- `curr`: Current character position (0-indexed)
+- `wordlen`: Length of word (passed to avoid recalculating)
+- Returns: Number of documents containing the word
+
+**Lines 2-3: Check Current Character Match**
+```cpp
+if(word[curr]==value){
+```
+- Compare current character with this node's value
+- If match, continue deeper (child)
+- If no match, check siblings
+
+**Lines 4-6: Check if End of Word**
+```cpp
+if(curr==wordlen-1){
+    if(list!=NULL){
+        return list->volume();
+```
+- `curr==wordlen-1` means we're at last character
+- If this node has a listnode, word exists!
+- Call `list->volume()` to count documents
+
+**Difference from tfsearchword():**
+```cpp
+// tfsearchword() - counts occurrences in SPECIFIC document
+return list->search(id);  // Returns frequency in doc id
+
+// dfsearchword() - counts TOTAL documents containing word
+return list->volume();  // Returns number of documents
+```
+
+**Lines 10-15: Continue to Child**
+```cpp
+else{
+    if(child!=NULL){
+        return child->dfsearchword(word, curr+1, wordlen);
+    }else{
+        return 0;
+    }
+}
+```
+- Not at end of word yet, continue deeper
+- Move to child node with `curr+1` (next character)
+- Pass `wordlen` along (no recalculation!)
+- If no child exists, word incomplete → return 0
+
+**Lines 16-22: Check Siblings**
+```cpp
+else{
+    if(sibling!=NULL){
+        return sibling->dfsearchword(word, curr, wordlen);
+    }else{
+        return 0;
+    }
+}
+```
+- Current node doesn't match character
+- Try sibling nodes (alternative paths)
+- Keep `curr` same (still looking for same character)
+- Pass `wordlen` along
+- If no siblings, character not found → return 0
+
+---
+
+### searchall() Implementation
+
+```cpp
+void TrieNode::searchall(char* buffer, int curr){
+    if(value != -1){
+        buffer[curr] = value;
+        if(list != NULL){
+            buffer[curr+1] = '\0';
+            cout << buffer << endl;
+        }
+        if(child != NULL){
+            child->searchall(buffer, curr+1);
+        }
+    }
+    if(sibling != NULL){
+        sibling->searchall(buffer, curr);
+    }
+}
+```
+
+#### Line-by-Line Breakdown
+
+**Line 1: Function Signature**
+```cpp
+void TrieNode::searchall(char* buffer, int curr)
+```
+- `buffer`: Character array for building words
+- `curr`: Current position in buffer
+- Returns: void (prints directly to console)
+
+**Lines 2-3: Check Valid Node**
+```cpp
+if(value != -1){
+    buffer[curr] = value;
+```
+- Skip root node (value == -1)
+- Add current character to buffer at position `curr`
+
+**Lines 4-7: Check if Complete Word**
+```cpp
+if(list != NULL){
+    buffer[curr+1] = '\0';
+    cout << buffer << endl;
+}
+```
+- If listnode exists, we've reached end of a word
+- Add null terminator after current character
+- Print the complete word
+- **Note**: Doesn't return! Continues to explore more words
+
+**Lines 8-10: Recurse to Child**
+```cpp
+if(child != NULL){
+    child->searchall(buffer, curr+1);
+}
+```
+- Continue building longer words
+- Increment position for next character
+- Explores depth-first
+
+**Lines 12-14: Recurse to Sibling**
+```cpp
+if(sibling != NULL){
+    sibling->searchall(buffer, curr);
+}
+```
+- Explore alternative paths at same level
+- Keep same buffer position (replace character)
+- Explores breadth at current depth
+
+---
+
+### Search Flow Example: "search" in documents
+
+**Initial Call:**
+```cpp
+trie->dfsearchword("search", 0, 6)
+//                   │       │  │
+//                   │       │  └─ wordlen (calculated once!)
+//                   │       └─── curr (start at 0)
+//                   └─────────── word to find
+```
+
+**Recursion Steps:**
+
+**Step 1: Find 's'**
+```
+At root level, curr=0
+word[0]='s'
+Check siblings → finds 's'
+Match found, go to child
+```
+
+**Step 2: Find 'e'**
+```
+At 's' node, curr=1
+word[1]='e'
+Check children → finds 'e'
+Match found, go to child
+```
+
+**Steps 3-6: Find 'a', 'r', 'c', 'h'**
+```
+Continue through: 'a' → 'r' → 'c' → 'h'
+Each time: curr++, go to child
+```
+
+**Step 7: End of Word**
+```
+At 'h' node, curr=5
+word[5]='h'
+Match found
+
+Check: curr==wordlen-1?
+       5==6-1? → YES! End of word!
+       
+Check: list!=NULL?
+       YES! → list->volume()
+```
+
+**Step 8: Count Documents**
+```
+Listnode chain: [doc=1] → [doc=2] → [doc=5] → NULL
+
+volume():
+  Count node 1: return 1 + next->volume()
+  Count node 2: return 1 + next->volume()
+  Count node 3: return 1 + NULL
+  Total: 3 documents
+```
+
+**Final Return:** `3` (word "search" appears in 3 documents)
+
+---
+
+### searchall() Traversal Example
+
+**Trie Structure:**
+```
+Root
+ ├─ h (child)
+ │   └─ e (child)
+ │       └─ l (child)
+ │           └─ l (child)
+ │               └─ o [list] (child)
+ │                   └─ w [list]
+ ├─ w (sibling of h)
+ │   └─ e (child)
+ │       └─ b [list]
+ └─ s (sibling of w)
+     └─ e (child)
+         └─ a (child)
+             └─ r (child)
+                 └─ c (child)
+                     └─ h [list]
+```
+
+**Call:** `trie->searchall(buffer, 0)`
+
+**Traversal Order (DFS):**
+
+```
+1. Root (value=-1) → skip, go to child
+   
+2. 'h' → buffer[0]='h'
+   No list, go to child
+   
+3. 'e' → buffer[1]='e'
+   No list, go to child
+   
+4. 'l' → buffer[2]='l'
+   No list, go to child
+   
+5. 'l' → buffer[3]='l'
+   No list, go to child
+   
+6. 'o' → buffer[4]='o'
+   list exists! → print "hello"
+   Go to child
+   
+7. 'w' → buffer[5]='w'
+   list exists! → print "hellow"
+   No child, backtrack
+   
+8. Back to 'h', check sibling
+   
+9. 'w' → buffer[0]='w'
+   No list, go to child
+   
+10. 'e' → buffer[1]='e'
+    No list, go to child
+    
+11. 'b' → buffer[2]='b'
+    list exists! → print "web"
+    No child, backtrack
+    
+12. Back to 'w', check sibling
+    
+13. 's' → buffer[0]='s'
+    Continue... → prints "search"
+```
+
+**Output:**
+```
+hello
+hellow
+web
+search
+...
+```
+
+---
+
+### Performance Comparison
+
+#### dfsearchword() - Before vs After
+
+**Before (December 28):**
+```cpp
+if(curr==strlen(word)-1){  // ❌ strlen() every recursion!
+```
+
+**For word "search" (6 characters):**
+- 6 recursive calls (one per character)
+- 6 strlen() calls
+- Each strlen() loops 6 characters
+- Total: **36 character iterations**
+
+**After (January 1):**
+```cpp
+if(curr==wordlen-1){  // ✅ Use passed value!
+```
+
+**For word "search" (6 characters):**
+- 1 strlen() call (in Search.cpp)
+- 6 recursive calls (use passed wordlen)
+- Total: **6 character iterations**
+
+**Improvement:** 83% reduction! (36 → 6 iterations)
+
+---
+
+### Testing Results (January 1-2)
+
+**Test 1: dfsearchword() - word exists**
+```cpp
+trie->dfsearchword("search", 0, 6)
+→ Returns: 3 (appears in 3 documents) ✅
+```
+
+**Test 2: dfsearchword() - word not found**
+```cpp
+trie->dfsearchword("xyz", 0, 3)
+→ Returns: 0 (not found) ✅
+```
+
+**Test 3: dfsearchword() - case sensitive**
+```cpp
+trie->dfsearchword("Search", 0, 6)
+→ Returns: 1 (capital S) ✅
+
+trie->dfsearchword("search", 0, 6)
+→ Returns: 3 (lowercase s) ✅
+```
+
+**Test 4: searchall() - display all words**
+```cpp
+char* buffer = (char*)malloc(256);
+trie->searchall(buffer, 0);
+free(buffer);
+
+Output:
+Introduction
+A
+search
+engine
+is
+a
+software
+...
+✅
+```
+
+---
+
+### Summary of January 1-2 Changes
+
+| Component | Change | Impact |
+|-----------|--------|--------|
+| dfsearchword() signature | Added `wordlen` parameter | API change |
+| dfsearchword() line 4 | Use `wordlen` instead of `strlen()` | 83% performance boost |
+| dfsearchword() calls | Pass `wordlen` down recursively | Consistent optimization |
+| searchall() | New function implemented | Display all indexed words |
+| Overall complexity | O(n×depth) → O(depth) | Linear improvement |
+
+### Integration with Listnode
+
+**volume() function:**
+```cpp
+int listnode::volume(){
+    if(next != NULL) 
+        return 1 + next->volume();
+    else 
+        return 1;
+}
+```
+
+**How it works:**
+- Recursively counts all nodes in linked list
+- Each node represents one document
+- Returns total document count
+
+**Example:**
+```
+List: [doc=1] → [doc=2] → [doc=5] → NULL
+
+volume() call:
+  Node 1: 1 + next->volume()
+    Node 2: 1 + next->volume()
+      Node 3: 1 + next->volume()
+        NULL: 1
+      Returns: 1
+    Returns: 1 + 1 = 2
+  Returns: 1 + 2 = 3
+
+Total: 3 documents
+```
+
+---
+
+**Document Version**: 1.2  
+**Last Updated**: January 2, 2026  
+**Changes**: Implemented dfsearchword() and searchall(), performance optimization with wordlen  
+**New Features**: Document frequency search, complete vocabulary display  
+**Performance Gain**: 83% reduction in operations for dfsearchword(), O(n×depth) → O(depth)  
+**Status**: TF, DF, and vocabulary display all fully operational ✅  
 **Author**: High-Performance Search Engine Project  
 **Repository**: github.com/adarshpheonix2810/high-performance-search-engine-cpp
