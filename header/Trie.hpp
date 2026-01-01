@@ -18,6 +18,7 @@ public:
     void insert(char* token, int id);
     int dfsearchword(char* word, int curr, int wordlen);
     int tfsearchword(int id, char* word, int curr, int wordlen);
+    void searchall(char* buffer, int curr);
 };
 
 #endif
