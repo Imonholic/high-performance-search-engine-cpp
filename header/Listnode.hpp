@@ -13,5 +13,6 @@ class listnode
         ~listnode();
         void add(int did);
         int search(int did);
+        int volume();
 };
 #endif
