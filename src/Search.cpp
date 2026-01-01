@@ -6,7 +6,22 @@ void search(char* token, TrieNode *trie, Mymap *map, int k){
 }
 
 void df(TrieNode* trie){
-    cout<<"not implemented yet"<<endl;
+    char* token2 = strtok(NULL, " \t\n");
+    if(token2 == NULL){
+        cout<<"Error: Missing word. Usage: /df <word>"<<endl;
+        return;
+    }
+    
+    // Calculate length once for performance
+    int wordlen = strlen(token2);
+    int docCount = trie->dfsearchword(token2, 0, wordlen);
+    
+    // Display result with clear message
+    if(docCount == 0){
+        cout<<"Term '"<<token2<<"' not found in any document"<<endl;
+    } else {
+        cout<<"Term '"<<token2<<"' appears in "<<docCount<<" document(s)"<<endl;
+    }
 }
 
 int tf(char* token, TrieNode* trie){
