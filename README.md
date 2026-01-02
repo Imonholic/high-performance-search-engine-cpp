@@ -105,54 +105,17 @@ Understanding how search engines work is fundamental to backend engineering. Thi
    .\searchengine.exe -d ..\data\doc1.txt -k 5
    ```
 
-### Usage Examples
-
-#### Interactive Query Mode (New! December 28, 2025)
-
-The search engine now supports an **interactive command-line interface** for running queries:
+### Quick Start Example
 
 ```bash
-# Start the search engine
-.\searchengine.exe -d ..\data\doc1.txt -k 5
+# Run the search engine
+.\searchengine.exe -d ..\data\doc1.txt -d ..\data\doc2.txt -k 5
 
-# You'll see a prompt:
-Enter query (or type '/exit' to quit): 
-
-# Available commands:
-/search <query>     # Search for documents containing words
-/tf <doc_id> <word> # Get term frequency of word in document
-/df <word>          # Get document frequency of word
-/exit               # Exit the program
-```
-
-**Example Session:**
-```bash
-$ .\searchengine.exe -d ..\data\doc1.txt -d ..\data\doc2.txt -k 5
-
-Enter query (or type '/exit' to quit): /search hello world
-[Search results display here]
-
-Enter query (or type '/exit' to quit): /tf 1 hello
-Term frequency of 'hello' in document 1: 3
-
-Enter query (or type '/exit' to quit): /df hello
-Document frequency of 'hello': 2 documents
-
-Enter query (or type '/exit' to quit): /exit
-Exiting program...
-```
-
-#### Command-Line Arguments
-
-```bash
-# Search a single document
-.\searchengine.exe -d ..\data\doc1.txt -k 5
-
-# Search multiple documents
-.\searchengine.exe -d ..\data\doc1.txt -d ..\data\doc2.txt -k 10
-
-# Adjust number of results
-.\searchengine.exe -d ..\data\doc3.txt -k 3
+# Try these commands:
+Enter query: /search machine learning    # Find relevant documents
+Enter query: /tf 1 hello                 # Word count in doc 1
+Enter query: /df algorithm               # How many docs have this word
+Enter query: /exit                       # Exit program
 ```
 
 ---
@@ -291,33 +254,22 @@ high-performance-search-engine-cpp/
 
 ## 📈 Project Status
 
-### ✅ Completed (December 2025)
-- [x] Map class with dynamic document storage
-- [x] Trie data structure with insert functionality
-- [x] Listnode for term frequency tracking
-- [x] Document store with file I/O
-- [x] Text tokenization and parsing
-- [x] Basic search infrastructure
-- [x] Comprehensive documentation
-- [x] CMake build system
-- [x] **Interactive query system** ✨ (Dec 28)
-- [x] **Search module with /tf, /df commands** ✨ (Dec 28)
-- [x] **Command routing with input manager** ✨ (Dec 28)
-- [x] **Memory leak fixes** ✨ (Dec 28)
-- [x] **Robust error handling** ✨ (Dec 28)
-- [x] **Term Frequency (/tf) fully working** 🎯 (Dec 31)
-- [x] **Performance optimizations (strlen)** 🎯 (Dec 31)
-- [x] **Trie-Listnode integration** 🎯 (Dec 31)
-- [x] **Document Frequency (/df) fully working** 🎉 (Jan 1)
-- [x] **volume() function for DF counting** 🎉 (Jan 1)
-- [x] **searchall() - Display all indexed words** 🚀 (Jan 2)
-- [x] **Full /search command with BM25 ranking** 🎉 (Jan 2)
-- [x] **Maxheap implementation for top-k results** 🎉 (Jan 2)
-- [x] **Scorelist for document tracking** 🎉 (Jan 2)
-- [x] **Critical bug fixes (constructor, infinite loop, uninitialized memory)** 🐛 (Jan 2)
-- [x] **Input validation and error handling** ✅ (Jan 2)
-- [x] **Code quality improvements (variable naming, constants)** 📝 (Jan 2)
-- [x] **Comprehensive documentation (all modules)** 📚 (Jan 2)
+### ✅ Completed
+
+**Core Features:**
+- [x] Complete BM25 search engine with ranking
+- [x] All query commands working (/search, /tf, /df)
+- [x] Custom data structures (Map, Trie, Heap, Listnode, Scorelist)
+- [x] Interactive command-line interface
+- [x] Document indexing and text processing
+
+**Recent Updates (Jan 2, 2026):**
+- [x] Full /search with BM25 ranking (k1=1.2, b=0.75)
+- [x] Maxheap for O(n log k) top-k retrieval
+- [x] Fixed critical bugs (constructor, infinite loop, memory leaks)
+- [x] 50% BM25 performance optimization
+- [x] Comprehensive documentation for all modules
+- [x] Input validation and robust error handling
 
 ### 🔄 In Progress
 - [ ] Additional test cases and edge case handling
