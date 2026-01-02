@@ -21,12 +21,12 @@ int inputmanager(char* input, TrieNode* trie, Mymap* mymap, int k){
         tf(token,trie);
         return 1;
     }
-    else if(!strcmp(token,"/exit")){
+    else if(!strcmp(token,"/exit")||!strcmp(token,"/quit")){
         return 2;  // Signal to exit
     }
     else{
         cout<<"Unknown command: "<<token<<endl;
-        cout<<"Available commands: /search, /df, /tf, /exit"<<endl;
+        cout<<"Available commands: /search, /df, /tf, /exit, /quit"<<endl;
         return 0;  // Continue, not exit
     }
 }
@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
     char* input=NULL;
     size_t input_length=0;
     while(1){
-        cout << "Enter query (or type '/exit' to quit): ";
+        cout << "Enter query (or type '/exit' to /quit): ";
         if(getline(&input, &input_length, stdin) == -1){
             // EOF or error
             free(input);
