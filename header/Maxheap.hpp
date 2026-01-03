@@ -27,6 +27,9 @@ class Maxheap
     int get_count(){
         return curnumofscores;
     }
+    double get_score(){
+        return heap[0];
+    }
 
 };
 #endif
